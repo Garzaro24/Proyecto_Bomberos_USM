@@ -1,0 +1,6 @@
+{
+  "name": "Emergency Command System",
+  "description": "Sistema de gestión de registros de bomberos y emergencias con almacenamiento local fuera de línea (offline) y sincronización con el servidor de base de datos central.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
