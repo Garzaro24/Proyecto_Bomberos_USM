@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Download, FileText, Flame, Timer, ShieldAlert, Award } from 'lucide-react';
+import { Download, FileText, Flame, Timer, ShieldAlert, Award, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { ServiceRecord } from '../types';
 
@@ -7,19 +7,201 @@ interface AnalyticsProps {
   records: ServiceRecord[];
 }
 
-export default function Analytics({ records }: AnalyticsProps) {
-  const [timeframe, setTimeframe] = useState<'weekly' | 'monthly'>('weekly');
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+}
 
-  // Compute stats based on actual loaded records
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const breakdown = data.breakdown || {};
+    const breakdownEntries = Object.entries(breakdown).sort((a: any, b: any) => b[1] - a[1]);
+
+    return (
+      <div className="bg-[#030712]/95 border border-slate-800/90 rounded-xl p-3.5 shadow-2xl backdrop-blur-md text-left min-w-[210px] font-sans">
+        <p className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400 mb-2">{label}</p>
+        <div className="flex justify-between items-center mb-2.5 pb-1.5 border-b border-slate-800/60">
+          <span className="text-xs font-bold text-slate-300">Total:</span>
+          <span className="text-sm font-black text-slate-100 font-mono">{payload[0].value}</span>
+        </div>
+        {breakdownEntries.length > 0 ? (
+          <div className="space-y-1.5">
+            <p className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest mb-1">Tipos de Incidentes:</p>
+            {breakdownEntries.slice(0, 5).map(([type, val]: any) => (
+              <div key={type} className="flex justify-between items-center text-xs gap-4">
+                <span className="text-slate-400 font-semibold truncate max-w-[140px]">{type}</span>
+                <span className="font-mono text-indigo-300 font-extrabold text-[11px] bg-slate-900 border border-slate-800/40 px-1.5 py-0.5 rounded leading-none shrink-0">{val}</span>
+              </div>
+            ))}
+            {breakdownEntries.length > 5 && (
+              <p className="text-[9px] text-indigo-400/85 font-extrabold italic text-right mt-1.5 animate-pulse">
+                + {breakdownEntries.length - 5} más (Haz clic para ver todos)
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-[10px] text-slate-500 italic">Sin clasificación de tipo</p>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
+export default function Analytics({ records }: AnalyticsProps) {
+  const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
+  const [selectedPeriod, setSelectedPeriod] = useState<{ name: string; total: number; breakdown: Record<string, number> } | null>(null);
+  const [showAllTypes, setShowAllTypes] = useState<boolean>(false);
+
+  // Filter records based on selected timeframe so all KPIs, Pie Charts, and figures match perfectly
+  const activeRecords = useMemo(() => {
+    if (timeframe === 'daily') {
+      const allowedDates = new Set<string>();
+      for (let index = 0; index < 7; index++) {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - index));
+        const year = d.getFullYear();
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const dateNum = d.getDate().toString().padStart(2, '0');
+        allowedDates.add(`${year}-${month}-${dateNum}`);
+      }
+      return records.filter(r => r.serviceDate && allowedDates.has(r.serviceDate));
+    } else if (timeframe === 'weekly') {
+      const today = new Date();
+      const currentDay = today.getDay();
+      const daysSinceMonday = currentDay === 0 ? 6 : currentDay - 1;
+      const mondayOfCurrentWeek = new Date(today);
+      mondayOfCurrentWeek.setDate(today.getDate() - daysSinceMonday);
+      mondayOfCurrentWeek.setHours(0, 0, 0, 0);
+
+      const start = new Date(mondayOfCurrentWeek);
+      start.setDate(mondayOfCurrentWeek.getDate() - (3 * 7)); // Monday of 3 weeks ago
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(mondayOfCurrentWeek);
+      end.setDate(mondayOfCurrentWeek.getDate() + 6); // Sunday of current week
+      end.setHours(23, 59, 59, 999);
+
+      return records.filter(r => {
+        if (!r.serviceDate) return false;
+        const parts = r.serviceDate.split('-');
+        if (parts.length < 3) return false;
+        const rYear = parseInt(parts[0], 10);
+        const rMonth = parseInt(parts[1], 10) - 1;
+        const rDay = parseInt(parts[2], 10);
+        const rDate = new Date(rYear, rMonth, rDay, 12, 0, 0, 0);
+        return rDate >= start && rDate <= end;
+      });
+    } else if (timeframe === 'monthly') {
+      const today = new Date();
+      const yearMonthRanges = [];
+      for (let i = 3; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        yearMonthRanges.push({ year: d.getFullYear(), month: d.getMonth() });
+      }
+      return records.filter(r => {
+        if (!r.serviceDate) return false;
+        const parts = r.serviceDate.split('-');
+        if (parts.length < 2) return false;
+        const rYear = parseInt(parts[0], 10);
+        const rMonth = parseInt(parts[1], 10) - 1;
+        return yearMonthRanges.some(rng => rng.year === rYear && rng.month === rMonth);
+      });
+    } else {
+      // yearly
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const years = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
+      return records.filter(r => {
+        if (!r.serviceDate) return false;
+        const parts = r.serviceDate.split('-');
+        if (parts.length < 1) return false;
+        const rYear = parseInt(parts[0], 10);
+        return years.includes(rYear);
+      });
+    }
+  }, [timeframe, records]);
+
+  // Compute previous period count to show accurate dynamic comparison
+  const previousPeriodCount = useMemo(() => {
+    if (timeframe === 'daily') {
+      const previousAllowedDates = new Set<string>();
+      for (let index = 0; index < 7; index++) {
+        const d = new Date();
+        d.setDate(d.getDate() - (13 - index));
+        const year = d.getFullYear();
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const dateNum = d.getDate().toString().padStart(2, '0');
+        previousAllowedDates.add(`${year}-${month}-${dateNum}`);
+      }
+      return records.filter(r => r.serviceDate && previousAllowedDates.has(r.serviceDate)).length;
+    } else if (timeframe === 'weekly') {
+      const today = new Date();
+      const currentDay = today.getDay();
+      const daysSinceMonday = currentDay === 0 ? 6 : currentDay - 1;
+      const mondayOfCurrentWeek = new Date(today);
+      mondayOfCurrentWeek.setDate(today.getDate() - daysSinceMonday);
+      mondayOfCurrentWeek.setHours(0, 0, 0, 0);
+
+      const prevStart = new Date(mondayOfCurrentWeek);
+      prevStart.setDate(mondayOfCurrentWeek.getDate() - (7 * 7));
+      prevStart.setHours(0, 0, 0, 0);
+
+      const prevEnd = new Date(mondayOfCurrentWeek);
+      prevEnd.setDate(mondayOfCurrentWeek.getDate() - (3 * 7) - 1);
+      prevEnd.setHours(23, 59, 59, 999);
+
+      return records.filter(r => {
+        if (!r.serviceDate) return false;
+        const parts = r.serviceDate.split('-');
+        if (parts.length < 3) return false;
+        const rYear = parseInt(parts[0], 10);
+        const rMonth = parseInt(parts[1], 10) - 1;
+        const rDay = parseInt(parts[2], 10);
+        const rDate = new Date(rYear, rMonth, rDay, 12, 0, 0, 0);
+        return rDate >= prevStart && rDate <= prevEnd;
+      }).length;
+    } else if (timeframe === 'monthly') {
+      const today = new Date();
+      const prevYearMonthRanges = [];
+      for (let i = 7; i >= 4; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        prevYearMonthRanges.push({ year: d.getFullYear(), month: d.getMonth() });
+      }
+      return records.filter(r => {
+        if (!r.serviceDate) return false;
+        const parts = r.serviceDate.split('-');
+        if (parts.length < 2) return false;
+        const rYear = parseInt(parts[0], 10);
+        const rMonth = parseInt(parts[1], 10) - 1;
+        return prevYearMonthRanges.some(rng => rng.year === rYear && rng.month === rMonth);
+      }).length;
+    } else {
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const prevYears = [currentYear - 4, currentYear - 5, currentYear - 6, currentYear - 7];
+      return records.filter(r => {
+        if (!r.serviceDate) return false;
+        const parts = r.serviceDate.split('-');
+        if (parts.length < 1) return false;
+        const rYear = parseInt(parts[0], 10);
+        return prevYears.includes(rYear);
+      }).length;
+    }
+  }, [timeframe, records]);
+
+  // Compute stats based on active loaded records
   const statistics = useMemo(() => {
-    const total = records.length;
+    const total = activeRecords.length;
     
     // Average response time simulation based on IDs or random seed matching 4:12
     const baseSeconds = 252; // 4 minutes 12 seconds
     let avgDispTime = "04:12";
     if (total > 0) {
       // Calculate a slightly varied average based on types to feel alive
-      const sum = records.reduce((acc, r) => {
+      const sum = activeRecords.reduce((acc, r) => {
         const type = (r.serviceType || '').toLowerCase();
         if (type.includes('incendio')) return acc + 340; // Incendios y talas toman más tiempo
         if (type.includes('rescate') || type.includes('emergencia') || type.includes('atención')) return acc + 280;
@@ -33,7 +215,7 @@ export default function Analytics({ records }: AnalyticsProps) {
 
     // Dynamic type calculation
     const typeDistribution: Record<string, number> = {};
-    records.forEach(r => {
+    activeRecords.forEach(r => {
       const t = r.serviceType || 'Otro';
       typeDistribution[t] = (typeDistribution[t] || 0) + 1;
     });
@@ -57,8 +239,8 @@ export default function Analytics({ records }: AnalyticsProps) {
       .sort((a, b) => b.value - a.value);
 
     // Primary service type
-    const primaryType = sortedTypes[0]?.name || "Emergencias Médicas";
-    const primaryPercentage = sortedTypes[0]?.percentage || 68;
+    const primaryType = sortedTypes[0]?.name || "Sin incidentes";
+    const primaryPercentage = sortedTypes[0]?.percentage || 0;
 
     return {
       total,
@@ -67,55 +249,198 @@ export default function Analytics({ records }: AnalyticsProps) {
       primaryPercentage,
       distribution: sortedTypes
     };
-  }, [records]);
+  }, [activeRecords]);
+
+  // Compute actual dynamic percentage difference vs the previous period
+  const comparisonText = useMemo(() => {
+    const diff = statistics.total - previousPeriodCount;
+    const label = timeframe === 'daily' ? 'vs 7d anteriores'
+                : timeframe === 'weekly' ? 'vs 4s anteriores'
+                : timeframe === 'monthly' ? 'vs 4m anteriores'
+                : 'vs período anterior';
+
+    if (previousPeriodCount === 0) {
+      if (statistics.total === 0) {
+        return { text: "Sin cambios", isPositive: true, raw: "0%" };
+      }
+      return { text: `▲ +100% ${label}`, isPositive: true, raw: "+100%" };
+    }
+
+    const percentage = Math.round((diff / previousPeriodCount) * 100);
+    if (percentage > 0) {
+      return { text: `▲ +${percentage}% ${label}`, isPositive: true, raw: `+${percentage}%` };
+    } else if (percentage < 0) {
+      return { text: `▼ ${percentage}% ${label}`, isPositive: false, raw: `${percentage}%` };
+    } else {
+      return { text: `0% ${label}`, isPositive: true, raw: "0%" };
+    }
+  }, [statistics.total, previousPeriodCount, timeframe]);
 
   // Color mapping matching UI screens
   const COLORS = ['#041632', '#1b2b48', '#57657a', '#b9c7df', '#ff5952'];
 
-  // Prepare weekly chart data
+  // Prepare weekly chart data with breakdown of incident types
   const chartData = useMemo(() => {
-    if (timeframe === 'weekly') {
-      // Produce 6 weeks trends
-      const weeks = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
-      // Distribute total records among weeks
-      const counts = [
-        Math.round(statistics.total * 0.14),
-        Math.round(statistics.total * 0.16),
-        Math.round(statistics.total * 0.15),
-        Math.round(statistics.total * 0.19),
-        Math.round(statistics.total * 0.17),
-        Math.round(statistics.total * 0.19)
-      ];
-      // Adjust last week to sum up perfectly
-      const sum = counts.reduce((a, b) => a + b, 0);
-      if (sum !== statistics.total && counts.length > 0) {
-        counts[5] += (statistics.total - sum);
+    const translations: Record<string, string> = {
+      'Acto de presencia en persona sin signos vitales': 'Sin Signos Vitales',
+      'Administración de medicamentos': 'Medicación',
+      'Atención Pre-Hospitalaria': 'Pre-Hospitalaria',
+      'Hecho Vial tipo Colisión': 'Colisión Vial',
+      'Servicios De Ambulancia Traslado Extra Urbano': 'Traslado Extra Urbano'
+    };
+
+    const getCleanType = (type: string) => {
+      return translations[type] || type || 'Otro';
+    };
+
+    if (timeframe === 'daily') {
+      const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      const data = Array.from({ length: 7 }).map((_, index) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - index));
+        const year = d.getFullYear();
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const dateNum = d.getDate().toString().padStart(2, '0');
+        const isoDateStr = `${year}-${month}-${dateNum}`;
+        const dayName = daysOfWeek[d.getDay()];
+        const label = `${dayName} ${dateNum}`;
+
+        // Get actual records for this specific date
+        const dayRecords = records.filter(r => r.serviceDate && r.serviceDate === isoDateStr);
+
+        const breakdown: Record<string, number> = {};
+        dayRecords.forEach(r => {
+          const cleanType = getCleanType(r.serviceType);
+          breakdown[cleanType] = (breakdown[cleanType] || 0) + 1;
+        });
+
+        return {
+          name: label,
+          'Volumen de Incidentes': dayRecords.length,
+          breakdown
+        };
+      });
+
+      return data;
+    } else if (timeframe === 'weekly') {
+      const today = new Date();
+      const currentDay = today.getDay(); // 0 is Sun, 1 is Mon...
+      const daysSinceMonday = currentDay === 0 ? 6 : currentDay - 1;
+      const mondayOfCurrentWeek = new Date(today);
+      mondayOfCurrentWeek.setDate(today.getDate() - daysSinceMonday);
+      mondayOfCurrentWeek.setHours(0, 0, 0, 0);
+
+      const data = [];
+      const monthsList = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+      for (let i = 3; i >= 0; i--) {
+        const start = new Date(mondayOfCurrentWeek);
+        start.setDate(mondayOfCurrentWeek.getDate() - (i * 7));
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+
+        const label = `${start.getDate()} ${monthsList[start.getMonth()]} - ${end.getDate()} ${monthsList[end.getMonth()]}${i === 0 ? ' (Actual)' : ''}`;
+
+        // Filter actual records within this week range (inclusive)
+        const weekRecords = records.filter(r => {
+          if (!r.serviceDate) return false;
+          const parts = r.serviceDate.split('-');
+          if (parts.length < 3) return false;
+          const rYear = parseInt(parts[0], 10);
+          const rMonth = parseInt(parts[1], 10) - 1;
+          const rDay = parseInt(parts[2], 10);
+          const rDate = new Date(rYear, rMonth, rDay, 12, 0, 0, 0); // use noon to avoid timezone shift errors
+          return rDate >= start && rDate <= end;
+        });
+
+        const breakdown: Record<string, number> = {};
+        weekRecords.forEach(r => {
+          const cleanType = getCleanType(r.serviceType);
+          breakdown[cleanType] = (breakdown[cleanType] || 0) + 1;
+        });
+
+        data.push({
+          name: label,
+          'Volumen de Incidentes': weekRecords.length,
+          breakdown
+        });
       }
 
-      return weeks.map((w, index) => ({
-        name: w,
-        'Volumen de Incidentes': Math.max(0, counts[index])
-      }));
-    } else {
+      return data;
+    } else if (timeframe === 'monthly') {
       // Monthly 4 months trends
-      const months = ['Febrero', 'Marzo', 'Abril', 'Mayo'];
-      const counts = [
-        Math.round(statistics.total * 0.22),
-        Math.round(statistics.total * 0.24),
-        Math.round(statistics.total * 0.26),
-        Math.round(statistics.total * 0.28)
-      ];
-      const sum = counts.reduce((a, b) => a + b, 0);
-      if (sum !== statistics.total && counts.length > 0) {
-        counts[3] += (statistics.total - sum);
+      const today = new Date();
+      const monthsList = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      const data = [];
+
+      for (let i = 3; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const year = d.getFullYear();
+        const monthNum = d.getMonth();
+        const label = `${monthsList[monthNum]} ${year}`;
+
+        // Filter actual records within this calendar month
+        const monthRecords = records.filter(r => {
+          if (!r.serviceDate) return false;
+          const parts = r.serviceDate.split('-');
+          if (parts.length < 2) return false;
+          const rYear = parseInt(parts[0], 10);
+          const rMonth = parseInt(parts[1], 10) - 1;
+          return rYear === year && rMonth === monthNum;
+        });
+
+        const breakdown: Record<string, number> = {};
+        monthRecords.forEach(r => {
+          const cleanType = getCleanType(r.serviceType);
+          breakdown[cleanType] = (breakdown[cleanType] || 0) + 1;
+        });
+
+        data.push({
+          name: label,
+          'Volumen de Incidentes': monthRecords.length,
+          breakdown
+        });
       }
 
-      return months.map((m, index) => ({
-        name: m,
-        'Volumen de Incidentes': Math.max(0, counts[index])
-      }));
+      return data;
+    } else {
+      // Yearly 4 years trends (including the current year)
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const data = [];
+
+      for (let i = 3; i >= 0; i--) {
+        const year = currentYear - i;
+        const label = `${year}${i === 0 ? ' (Actual)' : ''}`;
+
+        // Filter actual records within this calendar year
+        const yearRecords = records.filter(r => {
+          if (!r.serviceDate) return false;
+          const parts = r.serviceDate.split('-');
+          if (parts.length < 1) return false;
+          const rYear = parseInt(parts[0], 10);
+          return rYear === year;
+        });
+
+        const breakdown: Record<string, number> = {};
+        yearRecords.forEach(r => {
+          const cleanType = getCleanType(r.serviceType);
+          breakdown[cleanType] = (breakdown[cleanType] || 0) + 1;
+        });
+
+        data.push({
+          name: label,
+          'Volumen de Incidentes': yearRecords.length,
+          breakdown
+        });
+      }
+
+      return data;
     }
-  }, [timeframe, statistics.total]);
+  }, [timeframe, records]);
 
   // Handle manual mock PDF trigger
   const handleExportPDF = () => {
@@ -149,7 +474,7 @@ export default function Analytics({ records }: AnalyticsProps) {
       </div>
 
       {/* Summary Bento Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Stat Card 1 */}
         <div className="bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg backdrop-blur-md">
           <div className="flex justify-between items-start mb-4">
@@ -160,26 +485,8 @@ export default function Analytics({ records }: AnalyticsProps) {
             <div className="text-4xl font-extrabold text-slate-100 font-mono tracking-tight">
               {statistics.total.toLocaleString()}
             </div>
-            <div className="text-xs text-emerald-400 mt-1.5 flex items-center gap-1 font-bold">
-              <span>▲ +12%</span>
-              <span className="text-slate-500 font-semibold">vs mes anterior</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stat Card 2 */}
-        <div className="bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg backdrop-blur-md">
-          <div className="flex justify-between items-start mb-4">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tiempo de Resp. Promedio</span>
-            <Timer className="w-5 h-5 text-indigo-400" />
-          </div>
-          <div>
-            <div className="text-4xl font-extrabold text-slate-100 font-mono tracking-tight">
-              {statistics.avgResponseTime}
-            </div>
-            <div className="text-xs text-emerald-400 mt-1.5 flex items-center gap-1 font-bold">
-              <span>▼ -0:15 min</span>
-              <span className="text-slate-500 font-semibold">vs mes anterior</span>
+            <div className={`text-xs mt-1.5 flex items-center gap-1 font-bold ${comparisonText.isPositive ? 'text-emerald-400' : 'text-rose-450'}`}>
+              <span>{comparisonText.text}</span>
             </div>
           </div>
         </div>
@@ -211,9 +518,22 @@ export default function Analytics({ records }: AnalyticsProps) {
         
         {/* Main Trend Chart (Spans 2 cols) */}
         <div className="lg:col-span-2 bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col shadow-lg backdrop-blur-md">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest">Métricas de Volumen de Incidentes</h3>
-            <div className="flex gap-1 bg-slate-950 p-1.5 rounded-xl border border-slate-850">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+            <div>
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest">Métricas de Volumen de Incidentes</h3>
+              <p className="text-[10px] text-indigo-400/90 font-black mt-1">💡 Haz clic en los botones del período (abajo) para ver el desglose completo</p>
+            </div>
+            <div className="flex gap-1 bg-slate-950 p-1.5 rounded-xl border border-slate-850 self-start sm:self-center">
+              <button 
+                onClick={() => setTimeframe('daily')}
+                className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer border-0 ${
+                  timeframe === 'daily' 
+                    ? 'bg-indigo-600/30 text-indigo-400 border border-indigo-550/20' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Diario (7d)
+              </button>
               <button 
                 onClick={() => setTimeframe('weekly')}
                 className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer border-0 ${
@@ -234,12 +554,25 @@ export default function Analytics({ records }: AnalyticsProps) {
               >
                 Mensual
               </button>
+              <button 
+                onClick={() => setTimeframe('yearly')}
+                className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer border-0 ${
+                  timeframe === 'yearly' 
+                    ? 'bg-indigo-600/30 text-indigo-400 border border-indigo-550/20' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Anual
+              </button>
             </div>
           </div>
-
+ 
           <div className="h-64 mt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <BarChart 
+                data={chartData} 
+                margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
                 <XAxis 
                   dataKey="name" 
@@ -252,26 +585,57 @@ export default function Analytics({ records }: AnalyticsProps) {
                   axisLine={false}
                   tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
                 />
-                <Tooltip 
-                  cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }}
-                  contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '12px', color: '#f8fafc' }}
-                  labelStyle={{ fontWeight: 'extrabold', color: '#f8fafc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                  itemStyle={{ color: '#818cf8', fontSize: '12px', fontWeight: 'bold' }}
-                />
+                {/* Tooltip removed to ensure clean visual presentation */}
                 <Bar 
                   dataKey="Volumen de Incidentes" 
                   fill="#4f46e5" 
                   radius={[6, 6, 0, 0]} 
-                  maxBarSize={45} 
+                  maxBarSize={45}
                 />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+ 
+          {/* Interactive buttons for period details */}
+          <div className="mt-5 pt-4 border-t border-slate-800/40">
+            <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <span>📋</span> Ver Desglose por Período:
+            </p>
+            <div className={`grid gap-2 grid-cols-2 sm:grid-cols-4 ${timeframe === 'daily' ? 'md:grid-cols-7' : 'md:grid-cols-4'}`}>
+              {chartData.map((data) => {
+                const displayName = data.name;
+                return (
+                  <button
+                    key={data.name}
+                    onClick={() => setSelectedPeriod({
+                      name: data.name,
+                      total: data['Volumen de Incidentes'] || 0,
+                      breakdown: data.breakdown || {}
+                    })}
+                    className="group px-2 py-2 bg-[#090d16]/70 hover:bg-indigo-600/10 border border-slate-800/90 hover:border-indigo-500/40 rounded-xl text-center transition-all duration-150 cursor-pointer flex flex-col justify-between items-center min-h-[50px] shadow-sm select-none"
+                  >
+                    <span className="text-[10px] font-bold text-slate-400 group-hover:text-indigo-400 transition-colors leading-none">{displayName}</span>
+                    <span className="font-mono text-[10px] font-black text-indigo-400/90 bg-indigo-950/20 border border-indigo-900/30 px-1.5 py-0.5 rounded mt-1.5 shadow-sm leading-none">{data['Volumen de Incidentes'] || 0} inc.</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Distribution Pie Chart (Spans 1 col) */}
         <div className="bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg backdrop-blur-md">
-          <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest mb-4">Distribución por Tipo</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest">Distribución por Tipo</h3>
+            {statistics.distribution.length > 5 && (
+              <button
+                onClick={() => setShowAllTypes(prev => !prev)}
+                className="text-[10px] font-black tracking-wider text-indigo-400 hover:text-indigo-300 transition-colors uppercase cursor-pointer"
+              >
+                {showAllTypes ? "Ver destacados" : "Ver todos"}
+              </button>
+            )}
+          </div>
           
           <div className="flex-1 flex flex-col justify-center items-center">
             {/* Real responsive PieChart from recharts */}
@@ -279,7 +643,7 @@ export default function Analytics({ records }: AnalyticsProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={statistics.distribution.slice(0, 5)}
+                    data={showAllTypes ? statistics.distribution : statistics.distribution.slice(0, 5)}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -287,7 +651,7 @@ export default function Analytics({ records }: AnalyticsProps) {
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {statistics.distribution.slice(0, 5).map((entry, index) => (
+                    {(showAllTypes ? statistics.distribution : statistics.distribution.slice(0, 5)).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -300,21 +664,113 @@ export default function Analytics({ records }: AnalyticsProps) {
             </div>
 
             {/* Structured Legend mapping back to UI style screenshot */}
-            <div className="w-full mt-6 space-y-2">
-              {statistics.distribution.slice(0, 5).map((item, index) => (
-                <div key={item.name} className="flex justify-between items-center text-xs">
-                  <div className="flex items-center gap-2.5 text-slate-300">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                    <span className="truncate max-w-[150px] font-semibold text-slate-300">{item.name}</span>
+            <div 
+              className={`w-full mt-6 space-y-2 pr-1 ${
+                showAllTypes ? 'max-h-48 overflow-y-auto' : ''
+              }`}
+            >
+              {statistics.distribution.length > 0 ? (
+                (showAllTypes ? statistics.distribution : statistics.distribution.slice(0, 5)).map((item, index) => (
+                  <div key={item.name} className="flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-2.5 text-slate-300 min-w-0 flex-1 mr-2">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="truncate font-semibold text-slate-300 animate-fade-in" title={item.name}>{item.name}</span>
+                    </div>
+                    <span className="font-mono font-extrabold text-slate-400 shrink-0">{item.percentage}%</span>
                   </div>
-                  <span className="font-mono font-extrabold text-slate-400">{item.percentage}%</span>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-xs text-slate-500 italic text-center py-4">No se registraron incidentes en este período.</p>
+              )}
             </div>
+
+            {statistics.distribution.length > 5 && (
+              <div className="w-full mt-4 flex justify-center">
+                <button
+                  onClick={() => setShowAllTypes(prev => !prev)}
+                  className="px-4 py-1.5 bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-[10px] font-bold text-slate-400 hover:text-slate-200 transition-all rounded-lg shadow-sm cursor-pointer"
+                >
+                  {showAllTypes ? "Ocultar menos conocidos" : `Mostrar todos (${statistics.distribution.length})`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
       </div>
+
+      {/* Modal for detailed period breakdown */}
+      {selectedPeriod && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in"
+          onClick={() => setSelectedPeriod(null)}
+        >
+          <div 
+            className="bg-[#0b0f19] border border-slate-800/95 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-5 border-b border-slate-800/80 flex justify-between items-center bg-slate-900/40">
+              <div>
+                <h4 className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-widest">Detalle Operativo</h4>
+                <h3 className="text-base font-black text-slate-100 mt-1">
+                  Sucesos en {selectedPeriod.name}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedPeriod(null)}
+                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800/60 transition-colors cursor-pointer border-0 shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 overflow-y-auto space-y-4 max-h-[50vh] custom-scrollbar">
+              <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-3.5 flex justify-between items-center shadow-inner">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest text-[10px]">Incidentes Reportados</span>
+                <span className="text-xl font-black text-indigo-400 font-mono bg-indigo-950/30 border border-indigo-900/40 px-3 py-0.5 rounded-lg shadow-sm">{selectedPeriod.total}</span>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest pl-1">Clasificación de Sucesos</p>
+                <div className="divide-y divide-slate-850/40">
+                  {Object.entries(selectedPeriod.breakdown).length > 0 ? (
+                    (Object.entries(selectedPeriod.breakdown) as [string, number][])
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([type, count]) => {
+                        const percentage = selectedPeriod.total > 0 ? Math.round((count / selectedPeriod.total) * 100) : 0;
+                        return (
+                          <div key={type} className="py-3.5 flex justify-between items-center gap-4">
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-xs font-bold text-slate-200 truncate">{type}</span>
+                              <span className="text-[10px] font-semibold text-slate-500 mt-1">
+                                {percentage}% {timeframe === 'daily' ? 'del día' : timeframe === 'weekly' ? 'de la semana' : timeframe === 'monthly' ? 'del mes' : 'del año'}
+                              </span>
+                            </div>
+                            <span className="font-mono text-xs font-black text-slate-200 bg-slate-900/80 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0 shadow-sm">{count}</span>
+                          </div>
+                        );
+                      })
+                  ) : (
+                    <p className="text-xs text-slate-500 italic py-4 text-center">No se encontraron incidentes para este período.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-850/60 bg-slate-950/40 flex justify-end">
+              <button 
+                onClick={() => setSelectedPeriod(null)}
+                className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 rounded-xl font-bold text-xs tracking-wider uppercase transition-all duration-150 cursor-pointer"
+              >
+                Cerrar Detalle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

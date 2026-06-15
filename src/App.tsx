@@ -27,6 +27,7 @@ import HistoryView from './components/HistoryView';
 import SettingsPage from './components/SettingsPage';
 import SupportPage from './components/SupportPage';
 import AuthPortal from './components/AuthPortal';
+import USMLogo from './components/USMLogo';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'daily_log' | 'records_admin' | 'reports' | 'history' | 'settings' | 'support'>('daily_log');
@@ -399,15 +400,13 @@ export default function App() {
         
         {/* Profile/Header area */}
         <div className="p-6 border-b border-slate-800/60 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.25)] flex items-center justify-center">
-            <Flame className="w-5 h-5 text-white fill-white" />
-          </div>
+          <USMLogo className="w-10 h-10 shadow-[0_0_12px_rgba(30,58,138,0.4)]" />
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)] animate-pulse"></span>
-              <h1 className="text-xs font-bold text-slate-200 font-sans tracking-widest uppercase">Estación 12</h1>
+              <h1 className="text-xs font-extrabold text-slate-200 font-sans tracking-wide uppercase">Bomberos USM</h1>
             </div>
-            <p className="text-[11px] font-semibold text-slate-400 font-sans mt-0.5">Dpt. Bomberos UFD</p>
+            <p className="text-[10px] font-semibold text-slate-400 font-sans mt-0.5 tracking-wider">U. Santa María, VE</p>
           </div>
         </div>
 
@@ -489,28 +488,25 @@ export default function App() {
             </button>
           </li>
 
-          <li>
-            <button 
-              onClick={() => setCurrentTab('support')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-xs font-bold tracking-wide uppercase cursor-pointer border ${
-                currentTab === 'support'
-                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-transparent'
-              }`}
-            >
-              <HelpCircle className="w-4 h-4 shrink-0" />
-              Ayuda / Manual
-            </button>
-          </li>
+
 
         </ul>
 
         {/* Active User Session Details card inside sidebar footer */}
         <div className="p-4 bg-slate-950/45 border-t border-slate-800/65">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 via-indigo-500 to-purple-600 flex items-center justify-center text-[11px] font-extrabold text-white shrink-0 shadow-md">
-              {sessionUser?.name ? sessionUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'US'}
-            </div>
+            {sessionUser?.photoBase64 ? (
+              <img 
+                src={sessionUser.photoBase64} 
+                alt={sessionUser.name} 
+                className="w-9 h-9 rounded-xl object-cover shadow-md shrink-0 border border-slate-800" 
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 via-indigo-500 to-purple-600 flex items-center justify-center text-[11px] font-extrabold text-white shrink-0 shadow-md">
+                {sessionUser?.name ? sessionUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'US'}
+              </div>
+            )}
             <div className="flex flex-col min-w-0 flex-1">
               <span className="text-xs font-extrabold text-slate-200 truncate leading-tight block">
                 {sessionUser?.name}
@@ -540,67 +536,6 @@ export default function App() {
         
         {/* Global sticky header navigation */}
         <header className="fixed top-0 right-0 left-[260px] bg-[#0f172a]/85 backdrop-blur-md border-b border-slate-800/80 h-16 px-8 flex justify-between items-center z-30">
-          
-          {/* Brand/Nav header left */}
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-bold font-sans text-slate-100 uppercase tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-350">Partes Digitales UFD</span>
-            
-            {/* Status light block */}
-            <div className="hidden lg:flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.7)] animate-pulse'}`} />
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${isOnline ? 'text-emerald-450' : 'text-amber-450'}`}>
-                {isOnline ? "Servidor Conectado" : "BD Local Protegida"}
-              </span>
-            </div>
-            
-            {/* Syncing inline loader */}
-            {isSyncing && (
-              <div className="flex items-center gap-1.5 text-xs text-indigo-400 ml-2 animate-pulse font-semibold">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                <span>Sincronizando...</span>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Universal search or tab metadata */}
-          <div className="flex items-center gap-4">
-            
-            {/* Dispatch CTA Action Button in red */}
-            <button 
-              onClick={handleDispatchAlert}
-              className="bg-rose-600 font-bold text-white px-4 py-2 rounded-xl text-xs tracking-wider uppercase hover:bg-rose-500 transition-all cursor-pointer shadow-[0_0_12px_rgba(225,29,72,0.35)] border-0"
-            >
-              Despachar Alerta
-            </button>
-
-            <div className="w-px h-6 bg-slate-800 mx-1" />
-
-            {/* Notification triggers */}
-            <div className="relative">
-              <button 
-                onClick={() => alert("Ninguna notificación pendiente. Cobertura de radio VHF estable.")}
-                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800/50 transition-colors cursor-pointer block border-0"
-              >
-                <Bell className="w-4 h-4" />
-              </button>
-              {pendingSyncCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
-                  {pendingSyncCount}
-                </span>
-              )}
-            </div>
-
-            {/* Profile Avatar Icon */}
-            <button 
-              onClick={() => setCurrentTab('history')}
-              className="text-slate-400 hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-800/50 transition-colors cursor-pointer block border-0"
-              title="Cuenta de Oficial"
-            >
-              <User className="w-5 h-5" />
-            </button>
-
-          </div>
-
         </header>
 
         {/* 3. CORE PAGE CANVAS (Padding container from 16 h-offset) */}
@@ -666,6 +601,7 @@ export default function App() {
               onDeleteMilestone={handleDeleteMilestone}
               sessionUser={sessionUser}
               onUpdateProfile={handleUpdateProfile}
+              records={records}
             />
           )}
 

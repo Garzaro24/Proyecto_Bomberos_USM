@@ -47,7 +47,7 @@ export default function SupportPage() {
 
       {/* Contact card */}
       <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-sidebar_border pb-2">Información del Sistema de Despacho (Station 12)</h3>
+        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-sidebar_border pb-2">Información del Sistema de Despacho (Bomberos USM)</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs text-slate-650">
           <div className="space-y-2">
             <p className="font-semibold text-slate-800 uppercase tracking-wide">Líneas Directas de Despacho:</p>
@@ -55,12 +55,12 @@ export default function SupportPage() {
               <Phone className="w-4 h-4 text-rose-600" />
               <span className="font-mono text-slate-900 font-bold">Línea de Emergencias: 911 (Interno ext. 1201)</span>
             </div>
-            <p className="text-slate-500 font-sans">Para soporte de radiofrecuencias VHF diríjase a la consola de despacho de la Estación 12.</p>
+            <p className="text-slate-500 font-sans">Para soporte de radiofrecuencias VHF diríjase a la consola de despacho de Bomberos USM.</p>
           </div>
           <div className="space-y-1">
             <p className="font-semibold text-slate-800 uppercase tracking-wide">Creditos del Sistema:</p>
-            <p className="font-sans">Emergency Command System v2.6.4</p>
-            <p className="font-sans text-slate-400">Desarrollado para el Departamento de Bomberos Universitarios (UFD) bajo normativas de respuesta instantánea local.</p>
+            <p className="font-sans">Bomberos USM Command System v2.6.4</p>
+            <p className="font-sans text-slate-400">Desarrollado para el Cuerpo de Bomberos de la Universidad Santa María (Venezuela) bajo normativas de respuesta instantánea local.</p>
           </div>
         </div>
       </div>

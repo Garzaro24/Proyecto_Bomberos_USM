@@ -22,3 +22,46 @@
     transform: translateY(0);
   }
 }
+
+@media print {
+  html, body {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide high level sidebar navigation, fixed headers & control buttons */
+  header, nav, footer, button, [role="alert"], .no-print, .print\:hidden {
+    display: none !important;
+  }
+
+  /* Reset layout margins for the main App and pages structure on paper */
+  #root, .ml-\[260px\], .mt-16, .p-8 {
+    margin-left: 0 !important;
+    margin-top: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: static !important;
+    display: block !important;
+  }
+
+  /* Completely swap interactive screen-view with printable container */
+  #history-view-screen-root {
+    display: none !important;
+  }
+
+  #printable-expediente {
+    display: block !important;
+    visibility: visible !important;
+    background: white !important;
+    color: black !important;
+  }
+}
+

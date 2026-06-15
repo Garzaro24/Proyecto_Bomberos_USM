@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Flame, Lock, User, IdCard, Shield, Eye, EyeOff, AlertCircle, RefreshCw, LogIn, UserPlus } from 'lucide-react';
 import { UserProfile } from '../types';
+import USMLogo from './USMLogo';
 
 interface AuthPortalProps {
   onLoginSuccess: (user: UserProfile) => void;
@@ -223,15 +224,14 @@ export default function AuthPortal({ onLoginSuccess, isOnline }: AuthPortalProps
         
         {/* Brand / Logo Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500 via-orange-500 to-indigo-600 p-0.5 shadow-[0_0_20px_rgba(239,68,68,0.3)] mb-4 flex items-center justify-center">
-            <div className="w-full h-full bg-[#020617] rounded-2xl flex items-center justify-center">
-              <Flame className="w-7 h-7 text-red-500 fill-red-500 animate-pulse" />
-            </div>
-          </div>
+          <USMLogo className="w-16 h-16 shadow-[0_0_20px_rgba(59,130,246,0.3)] mb-4" />
           <h2 className="text-xl font-extrabold text-slate-100 tracking-tight text-center">
-            Estación de Bomberos 12
+            Bomberos USM
           </h2>
-          <p className="text-xs font-semibold text-slate-400 mt-1 uppercase tracking-widest text-center">
+          <p className="text-[10px] font-bold text-indigo-400 mt-1 uppercase tracking-widest text-center">
+            Universidad Santa María, Venezuela
+          </p>
+          <p className="text-[11px] font-semibold text-slate-400 mt-2 uppercase tracking-wide text-center">
             {isRegistering ? 'Formulario de Registro Oficial' : 'Portal de Acceso - Control Operativo'}
           </p>
         </div>
@@ -473,7 +473,7 @@ export default function AuthPortal({ onLoginSuccess, isOnline }: AuthPortalProps
           {/* Prompt/Info */}
           {!isRegistering && (
             <div className="text-[11px] text-slate-500 leading-normal text-center mt-1">
-              ¿No tienes una cuenta? Pulse "Registrar Cuenta" para rellenar sus credenciales oficiales de la Estación 12.
+              ¿No tienes una cuenta? Pulse "Registrar Cuenta" para rellenar sus credenciales oficiales de Bomberos USM.
             </div>
           )}
 

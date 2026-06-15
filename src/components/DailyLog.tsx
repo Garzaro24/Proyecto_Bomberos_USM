@@ -141,7 +141,10 @@ export default function DailyLog({ onSaveRecord, isOnline, sessionUser }: DailyL
       const expectedLast = (sessionUser.lastName || sessionUser.name.split(' ').slice(1).join(' ') || '').trim().toUpperCase();
       const expectedPersonnelId = (sessionUser.personnelId || '').trim().toUpperCase();
 
-      if (first !== expectedFirst || last !== expectedLast || formattedPersonnelId !== expectedPersonnelId) {
+      const normalizedFormatted = formattedPersonnelId.replace(/\D/g, '');
+      const normalizedExpected = expectedPersonnelId.replace(/\D/g, '');
+
+      if (first !== expectedFirst || last !== expectedLast || normalizedFormatted !== normalizedExpected) {
         setNotification({
           type: 'error',
           message: `Error de verificación: El Nombre, Apellido o Cédula ingresados no coinciden exactamente con sus credenciales de sesión activa de Bomberos (Sesión actual: ${expectedFirst} ${expectedLast}, Cédula: ${expectedPersonnelId}). Por favor, ingrese sus datos autorizados para registrar este reporte.`
