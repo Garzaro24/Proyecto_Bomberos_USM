@@ -24,7 +24,12 @@ const prodConfig = {
 };
 
 // 3. EL INTERRUPTOR DE ENTORNO
-// Usa 'dev' para tus pruebas locales. Cambia a 'prod' cuando vayas a armar el instalador .exe
+// ==========================================
+// ⚠️ ¡ALERTA ANTES DE COMPILAR EL .EXE!
+// 'dev'  -> Para programar en mi PC (Base de datos de pruebas)
+// 'prod' -> Para generar el instalador de la Estación de Bomberos
+//        -> Luego ejecutar "npm run electron:build" en la terminal para compilar y crear el .exe de produccion.
+// ==========================================
 const ENVIRONMENT = 'dev';
 
 // Asignación automática de la configuración activa

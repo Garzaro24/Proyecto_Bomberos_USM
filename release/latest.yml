@@ -1,8 +1,8 @@
 version: 1.0.0
 files:
   - url: Bomberos-USM-Setup-1.0.0.exe
-    sha512: J+0Z732lEqcoOLsIsZS7d0GR+Fo9hGx62GcQiriIQ5uDotvdedxwrxFHlQv5K4HXngT2GAen4xuVk26GjkgBng==
-    size: 110063937
+    sha512: 5B5YdUMg7hDbPBcP5vX9qV2dw0qPKHEEiZBm5nJjZCqDWHK+QFPbZ3jWF3SlAOYysgtNL29/ziUcZPpee+ZfuQ==
+    size: 110063867
 path: Bomberos-USM-Setup-1.0.0.exe
-sha512: J+0Z732lEqcoOLsIsZS7d0GR+Fo9hGx62GcQiriIQ5uDotvdedxwrxFHlQv5K4HXngT2GAen4xuVk26GjkgBng==
-releaseDate: '2026-06-16T03:36:23.833Z'
+sha512: 5B5YdUMg7hDbPBcP5vX9qV2dw0qPKHEEiZBm5nJjZCqDWHK+QFPbZ3jWF3SlAOYysgtNL29/ziUcZPpee+ZfuQ==
+releaseDate: '2026-06-16T05:24:28.944Z'
