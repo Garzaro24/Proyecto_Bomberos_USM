@@ -3,6 +3,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import * as db from './database.js';
 import * as firebaseSync from './firebase-sync.js';
+import { createRequire } from 'module';
+
+// electron-updater must be loaded via require (CommonJS) inside an ESM context
+const require = createRequire(import.meta.url);
+const { autoUpdater } = require('electron-updater');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,11 +63,82 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Setup auto-updater after window is created
+  setupAutoUpdater();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// ==================== AUTO-UPDATER ====================
+
+function setupAutoUpdater() {
+  // Only run in production (not in dev mode)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Updater] Skipped in development mode.');
+    return;
+  }
+
+  autoUpdater.autoDownload = false; // We ask the user first
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[Updater] Checking for updates...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[Updater] Update available:', info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send('updater:update-available', {
+        version: info.version,
+        releaseNotes: info.releaseNotes || ''
+      });
+    }
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[Updater] App is up to date.');
+    if (mainWindow) {
+      mainWindow.webContents.send('updater:up-to-date');
+    }
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`[Updater] Download: ${Math.round(progress.percent)}%`);
+    if (mainWindow) {
+      mainWindow.webContents.send('updater:download-progress', {
+        percent: Math.round(progress.percent),
+        transferred: progress.transferred,
+        total: progress.total
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[Updater] Update downloaded, ready to install:', info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send('updater:update-downloaded', {
+        version: info.version
+      });
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[Updater] Error:', err.message);
+    if (mainWindow) {
+      mainWindow.webContents.send('updater:error', { message: err.message });
+    }
+  });
+
+  // Check for updates 5 seconds after app is ready (allow UI to render first)
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(err => {
+      console.error('[Updater] checkForUpdates failed:', err.message);
+    });
+  }, 5000);
+}
 
 // ==================== IPC HANDLERS ====================
 
@@ -413,3 +489,29 @@ ipcMain.handle('cloud:get-status', async () => {
 ipcMain.handle('cloud:check-internet', async () => {
   return firebaseSync.checkInternet();
 });
+
+// --- AUTO-UPDATER ---
+
+ipcMain.handle('updater:start-download', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('updater:install-now', async () => {
+  // Quit and install immediately (the new installer will not erase userData)
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.handle('updater:check-now', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, version: result?.updateInfo?.version };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+

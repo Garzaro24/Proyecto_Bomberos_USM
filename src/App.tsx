@@ -26,6 +26,7 @@ import SettingsPage from './components/SettingsPage';
 import SupportPage from './components/SupportPage';
 import AuthPortal from './components/AuthPortal';
 import USMLogo from './components/USMLogo';
+import UpdaterBanner from './components/UpdaterBanner';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'daily_log' | 'records_admin' | 'reports' | 'history' | 'settings' | 'support'>('daily_log');
@@ -179,6 +180,9 @@ export default function App() {
   return (
     <div className="bg-[#020617] text-slate-100 font-sans min-h-screen flex text-[14px] leading-[20px] select-none">
       
+      {/* Auto-updater floating banner */}
+      <UpdaterBanner />
+
       {/* 1. PERSISTENT GLOBAL DARK SIDEBAR (fixed 260px) */}
       <nav className="fixed left-0 top-0 h-full w-[260px] bg-[#020617] border-r border-slate-800/80 flex flex-col overflow-y-auto z-20">
         
