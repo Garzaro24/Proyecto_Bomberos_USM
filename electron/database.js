@@ -85,24 +85,37 @@ export async function initDatabase() {
       synced INTEGER DEFAULT 0
     );
   `);
+  // Force re-sync of all users to Firestore to upload credentials
+  db.run('UPDATE users SET synced = 0');
   saveDatabase();
 
-  // Seed default admin user if no users exist
-  const countStmt = db.prepare('SELECT COUNT(*) as count FROM users');
-  countStmt.step();
-  const userCount = countStmt.getAsObject().count;
-  countStmt.free();
+  // Migrate or create the canonical 'admin' user with secure credentials
+  const adminStmt = db.prepare("SELECT username FROM users WHERE username = 'admin'");
+  const adminExists = adminStmt.step();
+  adminStmt.free();
 
-  if (userCount === 0) {
-    const { salt, hash } = hashPassword('password123');
-    const stmt = db.prepare(`
+  if (adminExists) {
+    // Migrate existing admin: update password and role
+    const { salt, hash } = hashPassword('Admin2026.');
+    const updateStmt = db.prepare(`
+      UPDATE users SET salt = ?, hash = ?, role = 'Administrador', synced = 0
+      WHERE username = 'admin'
+    `);
+    updateStmt.run([salt, hash]);
+    updateStmt.free();
+    saveDatabase();
+    console.log('Admin user migrated: password and role updated.');
+  } else {
+    // Create admin from scratch (new database)
+    const { salt, hash } = hashPassword('Admin2026.');
+    const insertStmt = db.prepare(`
       INSERT INTO users (username, firstName, lastName, name, personnelId, role, salt, hash, bloodType, synced)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `);
-    stmt.run(['admin', 'Jonathan', 'Hayes', 'Jonathan Hayes', 'UFD-8821', 'Teniente', salt, hash, 'O+']);
-    stmt.free();
+    insertStmt.run(['admin', 'Administrador', 'Sistema', 'Administrador Sistema', 'ADM-0001', 'Administrador', salt, hash, 'O+']);
+    insertStmt.free();
     saveDatabase();
-    console.log('Default admin seeded.');
+    console.log('Admin user created with secure credentials.');
   }
 
   return dbPath;
@@ -307,11 +320,13 @@ export function markMilestoneSynced(id) {
 
 // ==================== SYSTEM ====================
 
-export function resetDatabase() {
+export function resetDatabase(shouldSeed = true) {
   db.run('DELETE FROM records');
   db.run('DELETE FROM milestones');
-  // Re-seed mock data as requested by the server.ts structure when a reset occurs
-  seedInitialData();
+  // Re-seed mock data only if shouldSeed is true
+  if (shouldSeed) {
+    seedInitialData();
+  }
   saveDatabase();
 
   const recCountStmt = db.prepare('SELECT COUNT(*) as count FROM records');

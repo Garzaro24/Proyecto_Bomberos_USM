@@ -368,9 +368,9 @@ ipcMain.handle('milestones:delete', async (event, id) => {
 
 // --- SYSTEM ---
 
-ipcMain.handle('system:reset-db', async () => {
+ipcMain.handle('system:reset-db', async (event, shouldSeed) => {
   try {
-    return db.resetDatabase();
+    return db.resetDatabase(shouldSeed);
   } catch (err) {
     return { error: err.message };
   }

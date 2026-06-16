@@ -152,15 +152,19 @@ export default function App() {
   };
 
   // Force database reset in SQLite
-  const handleForceReset = async () => {
+  const handleForceReset = async (shouldSeed: boolean = true) => {
     try {
-      const result = await window.electronAPI.resetDatabase();
+      const result = await window.electronAPI.resetDatabase(shouldSeed);
       if (result.error) {
         alert(result.error);
         return;
       }
       await loadData();
-      setGlobalNotification("Sincronización exitosa: Base de datos local re-inicializada con 248 registros oficiales.");
+      if (shouldSeed) {
+        setGlobalNotification("Sincronización exitosa: Base de datos local re-inicializada con 248 registros oficiales.");
+      } else {
+        setGlobalNotification("Sincronización exitosa: Base de datos local limpiada por completo (0 registros).");
+      }
       setTimeout(() => setGlobalNotification(null), 5000);
     } catch (e) {
       console.error(e);

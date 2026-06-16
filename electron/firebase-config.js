@@ -1,5 +1,3 @@
-import { initializeApp } from "firebase/app";
-
 // 1. CREDENCIALES DE DESARROLLO (Tu base de datos de pruebas)
 const devConfig = {
   apiKey: "AIzaSyAc6dhAWhT6QUi9Sw01eaI9ohS0gNKqCPA",
@@ -35,8 +33,6 @@ const ENVIRONMENT = 'dev';
 // Asignación automática de la configuración activa
 const firebaseConfig = ENVIRONMENT === 'prod' ? prodConfig : devConfig;
 
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-
-// EXPORTACIÓN CRÍTICA: Exportamos tanto 'app' para React como 'firebaseConfig' para el proceso de Electron
-export { app, firebaseConfig };
+// EXPORTACIÓN CRÍTICA: Solo exportamos la configuración.
+// La inicialización de Firebase se realiza únicamente en firebase-sync.js para evitar doble inicialización.
+export { firebaseConfig };

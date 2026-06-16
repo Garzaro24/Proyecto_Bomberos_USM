@@ -9,7 +9,7 @@ export interface ElectronAPI {
   getMilestones: () => Promise<any[]>;
   addMilestone: (milestone: any) => Promise<any>;
   deleteMilestone: (id: string) => Promise<any>;
-  resetDatabase: () => Promise<any>;
+  resetDatabase: (shouldSeed?: boolean) => Promise<any>;
   getDbPath: () => Promise<string>;
   cloudBackupNow: () => Promise<any>;
   getCloudStatus: () => Promise<{ unsyncedCount: number; details: any; error?: string }>;

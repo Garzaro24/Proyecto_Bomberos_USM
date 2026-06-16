@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteMilestone: (id) => ipcRenderer.invoke('milestones:delete', id),
   
   // System
-  resetDatabase: () => ipcRenderer.invoke('system:reset-db'),
+  resetDatabase: (shouldSeed) => ipcRenderer.invoke('system:reset-db', shouldSeed),
   getDbPath: () => ipcRenderer.invoke('system:get-db-path'),
   
   // Cloud Backup

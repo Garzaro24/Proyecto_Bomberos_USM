@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { initializeFirestore, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { firebaseConfig } from './firebase-config.js';
 import * as db from './database.js';
 import dns from 'dns';
@@ -15,9 +15,12 @@ export function initFirebase() {
       return false;
     }
     app = initializeApp(firebaseConfig);
-    firestore = getFirestore(app);
+    // Initialize Firestore forcing long polling to prevent hangs in Electron Node environment
+    firestore = initializeFirestore(app, {
+      experimentalForceLongPolling: true
+    });
     isInitialized = true;
-    console.log("Firebase initialized successfully.");
+    console.log("Firebase initialized successfully with long polling.");
     return true;
   } catch (error) {
     console.error("Failed to initialize Firebase:", error);
@@ -25,15 +28,37 @@ export function initFirebase() {
   }
 }
 
-export function checkInternet() {
-  return new Promise((resolve) => {
-    dns.lookup('firestore.googleapis.com', (err) => {
-      if (err) {
-        resolve(false);
-      } else {
-        resolve(true);
-      }
+export async function checkInternet() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    await fetch('https://firestore.googleapis.com', {
+      method: 'HEAD',
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
+    return true;
+  } catch (err) {
+    console.warn("Internet check failed (cannot connect to firestore.googleapis.com):", err.message);
+    return false;
+  }
+}
+
+export function withTimeout(promise, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Tiempo de espera agotado al conectar con el servidor de la nube (Timeout). Por favor, asegúrese de haber creado e inicializado la base de datos 'Firestore Database' en la consola web de Firebase (https://console.firebase.google.com) para este proyecto."));
+    }, timeoutMs);
+
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
   });
 }
 
@@ -58,7 +83,7 @@ export async function syncLocalToCloud() {
     // 1. Sync users
     const unsyncedUsers = db.getUnsyncedUsers();
     for (const user of unsyncedUsers) {
-      // Exclude passwords salt & hash from cloud for security
+      // Exclude raw passwords, but sync salt & hash as requested by the user
       const cloudUserData = {
         username: user.username,
         firstName: user.firstName,
@@ -68,11 +93,13 @@ export async function syncLocalToCloud() {
         role: user.role,
         bloodType: user.bloodType,
         photoBase64: user.photoBase64 || null,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        salt: user.salt,
+        hash: user.hash
       };
 
       const userDocRef = doc(firestore, 'users', user.username);
-      await setDoc(userDocRef, cloudUserData, { merge: true });
+      await withTimeout(setDoc(userDocRef, cloudUserData, { merge: true }), 5000);
       db.markUserSynced(user.username);
       usersSynced++;
     }
@@ -84,7 +111,7 @@ export async function syncLocalToCloud() {
       
       // Clean up local fields for firestore compatibility
       const { synced, createdAt, ...cloudRecordData } = record;
-      await setDoc(recordDocRef, cloudRecordData, { merge: true });
+      await withTimeout(setDoc(recordDocRef, cloudRecordData, { merge: true }), 5000);
       db.markRecordSynced(record.id);
       recordsSynced++;
     }
@@ -95,7 +122,7 @@ export async function syncLocalToCloud() {
       const milestoneDocRef = doc(firestore, 'milestones', milestone.id);
       
       const { synced, createdAt, ...cloudMilestoneData } = milestone;
-      await setDoc(milestoneDocRef, cloudMilestoneData, { merge: true });
+      await withTimeout(setDoc(milestoneDocRef, cloudMilestoneData, { merge: true }), 5000);
       db.markMilestoneSynced(milestone.id);
       milestonesSynced++;
     }

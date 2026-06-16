@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, Database, Trash2, ShieldAlert, Cloud, CloudLightning, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface SettingsPageProps {
-  onForceReset: () => Promise<void>;
+  onForceReset: (shouldSeed: boolean) => Promise<void>;
   dbTotalCount: number;
   onDbModified: () => void;
 }
@@ -18,6 +18,50 @@ export default function SettingsPage({
   const [syncDetails, setSyncDetails] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Modal State for Database Reset
+  const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
+  const [authCode, setAuthCode] = useState<string>('');
+  const [authError, setAuthError] = useState<string>('');
+  const [step, setStep] = useState<'auth' | 'confirm'>('auth');
+  const [isResetting, setIsResetting] = useState<boolean>(false);
+  const [resetType, setResetType] = useState<'seed' | 'empty'>('seed');
+
+  const openResetModal = () => {
+    setIsResetModalOpen(true);
+    setAuthCode('');
+    setAuthError('');
+    setStep('auth');
+    setIsResetting(false);
+    setResetType('seed');
+  };
+
+  const closeResetModal = () => {
+    setIsResetModalOpen(false);
+  };
+
+  const handleVerifyCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (authCode === 'Bomberosusm2026limpiarbd.') {
+      setAuthError('');
+      setStep('confirm');
+    } else {
+      setAuthError('Código de autorización incorrecto.');
+    }
+  };
+
+  const handleExecuteReset = async () => {
+    setIsResetting(true);
+    try {
+      await onForceReset(resetType === 'seed');
+      onDbModified();
+      setIsResetModalOpen(false);
+    } catch (err: any) {
+      setAuthError(err.message || 'Error al restablecer la base de datos.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const checkConnectionAndStatus = async () => {
     try {
@@ -130,11 +174,7 @@ export default function SettingsPage({
 
           <div className="mt-8 pt-4 border-t border-slate-800/40">
             <button
-              onClick={() => {
-                if(confirm("¿Está seguro de que desea borrar toda la base de datos local y regenerar los 248 registros simulados de prueba?")) {
-                  onForceReset().then(onDbModified);
-                }
-              }}
+              onClick={openResetModal}
               className="w-full bg-rose-950/15 hover:bg-rose-950/45 border border-rose-900/40 text-rose-300 hover:text-rose-250 rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none"
             >
               <Trash2 className="w-4 h-4 text-rose-450" />
@@ -217,6 +257,166 @@ export default function SettingsPage({
           </p>
         </div>
       </div>
+
+      {/* Custom Authorization and Reset Modal */}
+      {isResetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#0b0f19] border border-slate-800/90 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-6">
+            {/* Header */}
+            <div className="flex items-start gap-3 border-b border-slate-800/60 pb-4">
+              <div className="p-2 bg-rose-950/40 border border-rose-900/40 rounded-xl text-rose-400">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-100 uppercase tracking-wider">Acción Protegida</h3>
+                <p className="text-xs text-slate-400 mt-1">Limpieza y re-sembrado de la base de datos local.</p>
+              </div>
+            </div>
+
+            {step === 'auth' ? (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Esta acción eliminará todos los registros y restablecerá la base de datos a su estado original de pruebas.
+                  <span className="block mt-2 font-semibold text-rose-300">Ingrese el código de autorización para continuar:</span>
+                </p>
+
+                <div className="space-y-2">
+                  <input
+                    type="password"
+                    placeholder="Ingrese código de seguridad..."
+                    value={authCode}
+                    onChange={(e) => {
+                      setAuthCode(e.target.value);
+                      if (authError) setAuthError('');
+                    }}
+                    autoFocus
+                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors font-mono"
+                  />
+                  {authError && (
+                    <p className="text-xs font-semibold text-rose-400 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {authError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeResetModal}
+                    className="flex-1 bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer outline-none"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-indigo-650 hover:bg-indigo-600 text-white rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer outline-none"
+                  >
+                    Verificar
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-emerald-950/20 border border-emerald-900/40 text-emerald-300 p-3 rounded-xl flex items-center gap-2.5 text-xs font-semibold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  Código de autorización verificado.
+                </div>
+
+                <div className="space-y-4">
+                  <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Seleccione la acción a realizar:</span>
+                  
+                  <div className="space-y-2.5">
+                    {/* Opción 1: Limpiar y re-sembrar */}
+                    <label className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                      resetType === 'seed'
+                        ? 'bg-indigo-950/25 border-indigo-500/40 text-slate-200'
+                        : 'bg-slate-950/40 border-slate-900 text-slate-450 hover:border-slate-800/80 hover:text-slate-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="resetType"
+                        value="seed"
+                        checked={resetType === 'seed'}
+                        onChange={() => setResetType('seed')}
+                        className="sr-only"
+                      />
+                      <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                        resetType === 'seed' ? 'border-indigo-500 bg-indigo-500' : 'border-slate-700 bg-transparent'
+                      }`}>
+                        {resetType === 'seed' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <span className="block text-xs font-extrabold uppercase tracking-wider">Limpiar y Re-Sembrar (248 datos)</span>
+                        <span className="block text-[11px] text-slate-400 mt-1 leading-normal">
+                          Elimina los registros actuales y genera 248 registros simulados nuevos para pruebas internas.
+                        </span>
+                      </div>
+                    </label>
+
+                    {/* Opción 2: Limpiar por completo */}
+                    <label className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                      resetType === 'empty'
+                        ? 'bg-indigo-950/25 border-indigo-500/40 text-slate-200'
+                        : 'bg-slate-950/40 border-slate-900 text-slate-450 hover:border-slate-800/80 hover:text-slate-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="resetType"
+                        value="empty"
+                        checked={resetType === 'empty'}
+                        onChange={() => setResetType('empty')}
+                        className="sr-only"
+                      />
+                      <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                        resetType === 'empty' ? 'border-indigo-500 bg-indigo-500' : 'border-slate-700 bg-transparent'
+                      }`}>
+                        {resetType === 'empty' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <span className="block text-xs font-extrabold uppercase tracking-wider text-rose-300">Limpiar por completo (Cero registros)</span>
+                        <span className="block text-[11px] text-slate-400 mt-1 leading-normal">
+                          Vacía totalmente la base de datos local de reportes e hitos de bomberos, dejándola en blanco.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <p className="text-[10px] font-bold text-rose-400/95 leading-tight uppercase tracking-wider">
+                    ⚠️ Esta acción no se puede deshacer. Por favor confirme su decisión.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={isResetting}
+                    onClick={closeResetModal}
+                    className="flex-1 bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer outline-none disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isResetting}
+                    onClick={handleExecuteReset}
+                    className="flex-1 bg-rose-650 hover:bg-rose-600 text-white rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer outline-none disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                  >
+                    {isResetting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Procesando...
+                      </>
+                    ) : (
+                      resetType === 'seed' ? "Sí, Re-Sembrar" : "Sí, Limpiar Todo"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

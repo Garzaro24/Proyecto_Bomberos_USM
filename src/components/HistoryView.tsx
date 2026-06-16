@@ -463,30 +463,49 @@ export default function HistoryView({
   }, [userMilestones, userRecords]);
 
   // Dynamic values based on records and milestones
+  // Parses a date string (YYYY-MM-DD) as local timezone to avoid UTC offset issues
+  const parseLocalDate = (dateStr: string): Date => {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(dateStr);
+  };
+
+  // Calculates years of service using month-based precision for accuracy
+  const calcYearsFromDate = (startDate: Date): number => {
+    const now = new Date();
+    const totalMonths = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+    // If we haven't reached the same day of the month yet, subtract one month
+    const adjustedMonths = now.getDate() >= startDate.getDate() ? totalMonths : totalMonths - 1;
+    return Math.max(0, adjustedMonths / 12);
+  };
+
   const calculatedYearsOfService = useMemo(() => {
     const onboarding = userMilestones.find(m => m.type === 'Onboarding');
     if (onboarding) {
-      const ms = new Date().getTime() - new Date(onboarding.date).getTime();
-      const yrs = ms / (1000 * 60 * 60 * 24 * 365.25);
-      return yrs > 0 ? yrs.toFixed(1) : '0.1';
+      const startDate = parseLocalDate(onboarding.date);
+      const yrs = calcYearsFromDate(startDate);
+      return yrs > 0 ? yrs.toFixed(2) : '0';
     }
     // Fallback based on earliest record
     const dates = [
-      ...userMilestones.map(m => new Date(m.date).getTime()),
-      ...userRecords.map(r => new Date(r.serviceDate || r.timestamp).getTime())
+      ...userMilestones.map(m => parseLocalDate(m.date).getTime()),
+      ...userRecords.map(r => parseLocalDate(r.serviceDate || r.timestamp?.substring(0, 10) || '').getTime())
     ].filter(t => !isNaN(t));
 
     if (dates.length > 0) {
       const earliest = Math.min(...dates);
-      const yrs = (new Date().getTime() - earliest) / (1000 * 60 * 60 * 24 * 365.25);
-      return yrs > 0 ? yrs.toFixed(1) : '0.1';
+      const startDate = new Date(earliest);
+      const yrs = calcYearsFromDate(startDate);
+      return yrs > 0 ? yrs.toFixed(2) : '0';
     }
-    return '16.4'; // Matches Jonathan Hayes' 2010-01-10 onboarding
+    return '0';
   }, [userMilestones, userRecords]);
 
   const defaultCondecoraciones = useMemo(() => {
     const accomplishments = userMilestones.filter(m => m.type === 'Commendation' || m.type === 'Certification' || m.type === 'Promotion');
-    return accomplishments.length || 3; // Fallback to 3 if no milestones are present
+    return accomplishments.length; // Defaults to 0 if no milestones are present
   }, [userMilestones]);
 
   const defaultAssignment = isSessionActive 
