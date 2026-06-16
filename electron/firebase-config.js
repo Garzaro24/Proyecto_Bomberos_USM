@@ -28,7 +28,7 @@ const prodConfig = {
 // 'prod' -> Para generar el instalador de la Estación de Bomberos
 //        -> Luego ejecutar "npm run electron:build" en la terminal para compilar y crear el .exe de produccion.
 // ==========================================
-const ENVIRONMENT = 'dev';
+const ENVIRONMENT = 'prod';
 
 // Asignación automática de la configuración activa
 const firebaseConfig = ENVIRONMENT === 'prod' ? prodConfig : devConfig;
