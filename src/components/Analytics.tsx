@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Download, FileText, Flame, Timer, ShieldAlert, Award, X } from 'lucide-react';
+import { toPng } from 'html-to-image';
+import jsPDF from 'jspdf';
+import { Download, FileText, Flame, Timer, ShieldAlert, Award, X, Eye, EyeOff, Printer, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { ServiceRecord } from '../types';
 
@@ -20,7 +22,7 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     const breakdownEntries = Object.entries(breakdown).sort((a: any, b: any) => b[1] - a[1]);
 
     return (
-      <div className="bg-[#030712]/95 border border-slate-800/90 rounded-xl p-3.5 shadow-2xl backdrop-blur-md text-left min-w-[210px] font-sans">
+      <div className="bg-[#030712]/95 border border-slate-800/90 rounded-xl p-3.5 shadow-2xl text-left min-w-[210px] font-sans">
         <p className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400 mb-2">{label}</p>
         <div className="flex justify-between items-center mb-2.5 pb-1.5 border-b border-slate-800/60">
           <span className="text-xs font-bold text-slate-300">Total:</span>
@@ -54,6 +56,11 @@ export default function Analytics({ records }: AnalyticsProps) {
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
   const [selectedPeriod, setSelectedPeriod] = useState<{ name: string; total: number; breakdown: Record<string, number> } | null>(null);
   const [showAllTypes, setShowAllTypes] = useState<boolean>(false);
+
+  // Print states
+  const [showDraftMode, setShowDraftMode] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Filter records based on selected timeframe so all KPIs, Pie Charts, and figures match perfectly
   const activeRecords = useMemo(() => {
@@ -442,41 +449,210 @@ export default function Analytics({ records }: AnalyticsProps) {
     }
   }, [timeframe, records]);
 
-  // Handle manual mock PDF trigger
-  const handleExportPDF = () => {
-    alert("Generando Reporte Operativo del Departamento en formato PDF...\nEste archivo PDF consolidará el volumen de " + statistics.total + " incidentes históricos.");
+  // Handle PDF Export Action
+  const handlePrintAction = async () => {
+    if (isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    setSuccessMsg("Generando reporte PDF. Por favor espere...");
+    
+    const wasDraftModeOff = !showDraftMode;
+    
+    if (wasDraftModeOff) {
+      setShowDraftMode(true);
+    }
+    
+    // Give UI time to update the button, render the draft mode, and load assets
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    let originalClassName = '';
+    try {
+      const element = document.getElementById('printable-analytics');
+      if (!element) {
+        throw new Error('Elemento de analíticas no encontrado');
+      }
+
+      originalClassName = element.className;
+
+      // Temporarily hide the draft helper badge and action buttons from the PDF output
+      const noPrintElements = element.querySelectorAll('.no-print');
+      const hiddenStates: string[] = [];
+      noPrintElements.forEach((el, index) => {
+        hiddenStates[index] = (el as HTMLElement).style.display;
+        (el as HTMLElement).style.display = 'none';
+      });
+
+      // We temporarily assign a fixed width inline or via class to prevent Recharts resize loops
+      element.className = originalClassName + ' w-[1000px] max-w-none';
+
+      // Use html-to-image
+      const dataUrl = await toPng(element, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: '#0b0f19',
+        style: {
+          border: 'none',
+          boxShadow: 'none',
+          borderRadius: '0',
+          margin: '0',
+        }
+      });
+
+      const safeDate = new Date().toISOString().substring(0, 10);
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'in',
+        format: 'letter'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const margin = 0.4;
+      const innerWidth = pdfWidth - margin * 2;
+      const innerHeight = pdfHeight - margin * 2;
+      
+      const ratio = imgProps.width / imgProps.height;
+      let renderWidth = innerWidth;
+      let renderHeight = renderWidth / ratio;
+      
+      if (renderHeight > innerHeight) {
+        renderHeight = innerHeight;
+        renderWidth = renderHeight * ratio;
+      }
+      
+      const x = margin + (innerWidth - renderWidth) / 2;
+      const y = margin + (innerHeight - renderHeight) / 2;
+
+      pdf.addImage(dataUrl, 'PNG', x, y, renderWidth, renderHeight);
+      pdf.save(`analiticas_servicio_${timeframe}_${safeDate}.pdf`);
+
+      // Restore elements
+      element.className = originalClassName;
+      noPrintElements.forEach((el, index) => {
+        (el as HTMLElement).style.display = hiddenStates[index] || '';
+      });
+      
+      setSuccessMsg("¡Reporte descargado con éxito en formato PDF!");
+      setTimeout(() => setSuccessMsg(null), 5000);
+      
+    } catch (error: any) {
+      console.error("PDF generation error:", error);
+      setSuccessMsg("Error al generar PDF: " + (error.message || 'Error desconocido'));
+      setTimeout(() => setSuccessMsg(null), 5000);
+      
+      // Attempt to safely restore state
+      const el = document.getElementById('printable-analytics');
+      if (el && typeof el.className !== 'undefined') {
+        el.className = originalClassName;
+        const hiddenEl = el.querySelectorAll('.no-print');
+        hiddenEl.forEach(child => {
+          (child as HTMLElement).style.display = '';
+        });
+      }
+    } finally {
+      setIsGeneratingPdf(false);
+      if (wasDraftModeOff) {
+        setTimeout(() => setShowDraftMode(false), 500);
+      }
+    }
   };
 
   return (
     <div className="animate-fade-in space-y-8 font-sans">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-800 pb-5">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-slate-100">Analíticas de Servicio</h2>
           <p className="text-slate-400 mt-2 text-base">Resumen de las métricas de respuesta departamental y distribución de servicios.</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <button 
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/45 rounded-xl font-bold text-xs tracking-wider uppercase transition-all duration-150 w-full md:w-auto justify-center"
-          >
-            <Download className="w-4 h-4 text-indigo-400" />
-            Exportar PDF
-          </button>
-          <select 
-            defaultValue="30"
-            className="px-4 py-2 bg-slate-950 border border-slate-850 rounded-xl text-xs font-bold text-slate-300 focus:outline-none focus:border-indigo-500 transition-all outline-none cursor-pointer w-full md:w-auto h-[38px]"
-          >
-            <option value="30" className="bg-[#020617] text-slate-200">Últimos 30 días</option>
-            <option value="90" className="bg-[#020617] text-slate-200">Este Trimestre</option>
-            <option value="365" className="bg-[#020617] text-slate-200">Año Completo</option>
-          </select>
+        <div className="flex flex-col md:flex-row items-end md:items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <button 
+              type="button"
+              onClick={() => {
+                setShowDraftMode(!showDraftMode);
+                if(!showDraftMode) {
+                  setTimeout(() => {
+                    document.getElementById('printable-analytics')?.scrollIntoView({ behavior: 'smooth' });
+                  }, 120);
+                }
+              }}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl border font-bold text-xs tracking-wide uppercase transition-all cursor-pointer w-full md:w-auto ${
+                showDraftMode 
+                  ? 'bg-indigo-650 border-indigo-500 text-white shadow-lg shadow-indigo-600/35 font-extrabold' 
+                  : 'bg-slate-900 border-slate-800/80 text-slate-300 hover:text-slate-100 hover:bg-[#1e293b]'
+              }`}
+            >
+              {showDraftMode ? <EyeOff className="w-4 h-4 text-indigo-200" /> : <Eye className="w-4 h-4 text-indigo-400" />}
+              {showDraftMode ? 'Cerrar Vista' : 'Previsualizar PDF'}
+            </button>
+            <button 
+              type="button"
+              onClick={handlePrintAction}
+              disabled={isGeneratingPdf}
+              className={`flex items-center justify-center gap-2 px-5 py-2 rounded-xl font-bold text-xs tracking-wide uppercase transition-all border shadow-lg w-full md:w-auto ${
+                isGeneratingPdf
+                  ? 'bg-slate-800 border-slate-700 text-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-550 hover:border-indigo-500 cursor-pointer shadow-indigo-600/15'
+              }`}
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generando PDF...
+                </>
+              ) : (
+                <>
+                  <Printer className="w-4 h-4 text-white" />
+                  Descargar PDF
+                </>
+              )}
+            </button>
+          </div>
+          {/* Removed the non-functional select dropdown for timeframe selection */}
         </div>
       </div>
+
+      {successMsg && (
+        <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-emerald-200 text-xs flex items-center gap-2.5 animate-fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <span className="font-semibold">{successMsg}</span>
+        </div>
+      )}
+
+      {/* Main Printable Area */}
+      <div 
+        id="printable-analytics"
+        className={`flex flex-col gap-6 w-full ${
+          showDraftMode ? 'bg-[#0f172a] p-6 lg:p-10 rounded-2xl ring-4 ring-indigo-500/20 shadow-2xl transition-all' : ''
+        }`}
+      >
+        {/* Helper Badge for Draft Mode */}
+        {showDraftMode && (
+          <div className="mb-2 no-print flex items-center justify-between bg-indigo-50/10 border border-indigo-500/20 p-3 rounded-xl text-xs text-indigo-300 select-none">
+            <div className="flex items-center gap-1.5 font-semibold">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+              </span>
+              Modo de Vista Previa de Impresión Activo (Orientación Horizontal recomendada)
+            </div>
+            <button 
+              onClick={() => setShowDraftMode(false)}
+              className="text-indigo-400 hover:text-indigo-300 font-bold hover:underline cursor-pointer bg-transparent border-0"
+            >
+              Cerrar Previsualización
+            </button>
+          </div>
+        )}
 
       {/* Summary Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Stat Card 1 */}
-        <div className="bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg backdrop-blur-md">
+        <div className="bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
           <div className="flex justify-between items-start mb-4">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Incidentes Totales</span>
             <Flame className="w-5 h-5 text-indigo-400" />
@@ -492,7 +668,7 @@ export default function Analytics({ records }: AnalyticsProps) {
         </div>
 
         {/* Highlight Card Map to Screenshot Accent Dark Navy background */}
-        <div className="bg-gradient-to-br from-[#12182c] to-[#0a0d1a] border border-indigo-500/20 text-white rounded-2xl p-5 flex flex-col justify-between md:col-span-2 relative overflow-hidden shadow-lg backdrop-blur-md">
+        <div className="bg-gradient-to-br from-[#12182c] to-[#0a0d1a] border border-indigo-500/20 text-white rounded-2xl p-5 flex flex-col justify-between md:col-span-2 relative overflow-hidden shadow-lg">
           <div className="relative z-10 h-full flex flex-col justify-between">
             <div className="flex justify-between items-start mb-4">
               <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Tipo de Servicio Principal</span>
@@ -517,7 +693,7 @@ export default function Analytics({ records }: AnalyticsProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Main Trend Chart (Spans 2 cols) */}
-        <div className="lg:col-span-2 bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col shadow-lg backdrop-blur-md">
+        <div className="lg:col-span-2 bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col shadow-lg">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
             <div>
               <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest">Métricas de Volumen de Incidentes</h3>
@@ -568,8 +744,10 @@ export default function Analytics({ records }: AnalyticsProps) {
           </div>
  
           <div className="h-64 mt-2">
-            <ResponsiveContainer width="100%" height="100%">
+            {showDraftMode || isGeneratingPdf ? (
               <BarChart 
+                width={700}
+                height={256}
                 data={chartData} 
                 margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
               >
@@ -588,12 +766,41 @@ export default function Analytics({ records }: AnalyticsProps) {
                 {/* Tooltip removed to ensure clean visual presentation */}
                 <Bar 
                   dataKey="Volumen de Incidentes" 
+                  isAnimationActive={false}
                   fill="#4f46e5" 
                   radius={[6, 6, 0, 0]} 
                   maxBarSize={45}
                 />
               </BarChart>
-            </ResponsiveContainer>
+            ) : (
+              <ResponsiveContainer width="100%" height={256}>
+                <BarChart 
+                  data={chartData} 
+                  margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                  <XAxis 
+                    dataKey="name" 
+                    tickLine={false} 
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }} 
+                  />
+                  <YAxis 
+                    tickLine={false} 
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
+                  />
+                  {/* Tooltip removed to ensure clean visual presentation */}
+                  <Bar 
+                    dataKey="Volumen de Incidentes" 
+                    isAnimationActive={false}
+                    fill="#4f46e5" 
+                    radius={[6, 6, 0, 0]} 
+                    maxBarSize={45}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
  
           {/* Interactive buttons for period details */}
@@ -624,7 +831,7 @@ export default function Analytics({ records }: AnalyticsProps) {
         </div>
 
         {/* Distribution Pie Chart (Spans 1 col) */}
-        <div className="bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg backdrop-blur-md">
+        <div className="bg-[#0f172a]/30 border border-slate-850/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-bold text-slate-200 uppercase tracking-widest">Distribución por Tipo</h3>
             {statistics.distribution.length > 5 && (
@@ -640,8 +847,8 @@ export default function Analytics({ records }: AnalyticsProps) {
           <div className="flex-1 flex flex-col justify-center items-center">
             {/* Real responsive PieChart from recharts */}
             <div className="relative w-40 h-40 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+              {showDraftMode || isGeneratingPdf ? (
+                <PieChart width={160} height={160}>
                   <Pie
                     data={showAllTypes ? statistics.distribution : statistics.distribution.slice(0, 5)}
                     cx="50%"
@@ -650,13 +857,33 @@ export default function Analytics({ records }: AnalyticsProps) {
                     outerRadius={75}
                     paddingAngle={3}
                     dataKey="value"
+                    isAnimationActive={false}
                   >
                     {(showAllTypes ? statistics.distribution : statistics.distribution.slice(0, 5)).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                 </PieChart>
-              </ResponsiveContainer>
+              ) : (
+                <ResponsiveContainer width={160} height={160}>
+                  <PieChart>
+                    <Pie
+                      data={showAllTypes ? statistics.distribution : statistics.distribution.slice(0, 5)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="value"
+                      isAnimationActive={false}
+                    >
+                      {(showAllTypes ? statistics.distribution : statistics.distribution.slice(0, 5)).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-2xl font-extrabold font-mono text-slate-150">{statistics.total}</span>
                 <span className="text-[9px] uppercase font-bold text-indigo-400 tracking-wider">Totales</span>
@@ -697,6 +924,9 @@ export default function Analytics({ records }: AnalyticsProps) {
           </div>
         </div>
 
+      </div>
+      
+      {/* End of Printable Area */}
       </div>
 
       {/* Modal for detailed period breakdown */}

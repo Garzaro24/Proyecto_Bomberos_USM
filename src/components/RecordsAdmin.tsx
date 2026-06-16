@@ -203,20 +203,6 @@ export default function RecordsAdmin({ records, onUpdateRecord, onDeleteRecord }
             </span>
           </h3>
           <div className="flex gap-1.5">
-            <button 
-              onClick={() => alert('Exportando base de datos a CSV de hoja de cálculo...')}
-              className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 rounded-xl transition-all cursor-pointer border-0" 
-              title="Exportar CSV"
-            >
-              <Download className="w-4 h-4 text-indigo-400" />
-            </button>
-            <button 
-              onClick={() => window.print()}
-              className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 rounded-xl transition-all cursor-pointer border-0" 
-              title="Imprimir registros"
-            >
-              <Printer className="w-4 h-4 text-indigo-400" />
-            </button>
           </div>
         </div>
 

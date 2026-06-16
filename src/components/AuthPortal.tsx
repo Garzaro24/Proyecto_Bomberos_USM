@@ -513,18 +513,6 @@ export default function AuthPortal({ onLoginSuccess, isOnline }: AuthPortalProps
             {isRegistering ? '← Regresar al Inicio de Sesión' : 'Registrar Cuenta de Personal →'}
           </button>
 
-          {/* Default Credentials Cheat Sheet */}
-          {!isRegistering && (
-            <div className="mt-5 p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 w-full">
-              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block mb-1">
-                Acceso Rápido Demo:
-              </span>
-              <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-400 font-mono text-center">
-                <div className="bg-[#020617] rounded p-1 border border-slate-800/50">Usuario: <span className="text-slate-100 font-bold">admin</span></div>
-                <div className="bg-[#020617] rounded p-1 border border-slate-800/50">Clave: <span className="text-slate-100 font-bold">password123</span></div>
-              </div>
-            </div>
-          )}
         </div>
 
       </div>

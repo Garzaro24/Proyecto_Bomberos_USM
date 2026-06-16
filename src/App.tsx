@@ -534,12 +534,8 @@ export default function App() {
       {/* 2. CHOOSE CORRESPONDING MAIN CONTENT WIDTH OFFSET (ML-260px) */}
       <div className="flex-1 ml-[260px] flex flex-col min-h-screen bg-[#020617]">
         
-        {/* Global sticky header navigation */}
-        <header className="fixed top-0 right-0 left-[260px] bg-[#0f172a]/85 backdrop-blur-md border-b border-slate-800/80 h-16 px-8 flex justify-between items-center z-30">
-        </header>
-
         {/* 3. CORE PAGE CANVAS (Padding container from 16 h-offset) */}
-        <main className="flex-1 mt-16 p-8 bg-[#020617]">
+        <main className="flex-1 p-8 bg-[#020617]">
           
           {/* Global Alert Notices (Synchronization prompts) */}
           {globalNotification && (

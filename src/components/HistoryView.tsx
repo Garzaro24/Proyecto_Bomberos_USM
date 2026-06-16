@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import html2pdf from 'html2pdf.js';
 import { 
   Award, 
   Shield, 
@@ -69,6 +70,7 @@ export default function HistoryView({
   // Print & Iframe detection states
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showDraftMode, setShowDraftMode] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   
   const isIframe = useMemo(() => {
     try {
@@ -78,16 +80,115 @@ export default function HistoryView({
     }
   }, []);
 
-  const handlePrintAction = () => {
-    try {
-      window.print();
-    } catch (err) {
-      console.warn("Print execution error in sandbox iframe", err);
+  const handlePrintAction = async () => {
+    if (isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    setSuccessMsg("Generando documento PDF oficial. Por favor espere...");
+    
+    const wasDraftModeOff = !showDraftMode;
+    
+    if (wasDraftModeOff) {
+      setShowDraftMode(true);
     }
     
-    // Always trigger the guidance modal if we're inside the iframe preview
-    if (isIframe) {
-      setShowPrintModal(true);
+    // Give UI time to update the button, render the draft mode in DOM, and load any assets
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    let originalClassName = '';
+    try {
+      const element = document.getElementById('printable-expediente');
+      if (!element) {
+        throw new Error('Elemento de expediente no encontrado');
+      }
+
+      // Temporarily hide the draft helper badge from the PDF output
+      const noPrintElements = element.querySelectorAll('.no-print');
+      const hiddenStates: string[] = [];
+      noPrintElements.forEach((el, index) => {
+        hiddenStates[index] = (el as HTMLElement).style.display;
+        (el as HTMLElement).style.display = 'none';
+      });
+
+      // Temporarily remove border classes from the main container
+      originalClassName = element.className;
+      element.className = "block max-w-full mx-auto p-6 bg-white text-black print:block w-[800px]";
+
+      const safeName = userFullName.replace(/\s+/g, '_').toLowerCase();
+      const safeId = userCedulaId.replace(/\D/g, '') || 'registro';
+
+      const opt = {
+        margin:       [0.4, 0.4, 0.4, 0.4] as [number, number, number, number], 
+        filename:     `expediente_${safeName}_${safeId}.pdf`,
+        image:        { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas:  { 
+          scale: 2, 
+          useCORS: true,
+          logging: false, // Keep console clean to prevent freezing on huge logs
+          windowWidth: 800,
+          onclone: (doc: Document) => {
+            // Remove the dark border and rounded styles from the cloned container specifically for the PDF render
+            const pdfContainer = doc.getElementById('printable-expediente');
+            if (pdfContainer) {
+              pdfContainer.style.border = 'none';
+              pdfContainer.style.borderRadius = '0';
+              pdfContainer.style.boxShadow = 'none';
+              pdfContainer.style.outline = 'none';
+              pdfContainer.style.margin = '0';
+              pdfContainer.className = pdfContainer.className
+                .replace(/border-4/g, '')
+                .replace(/border-slate-[0-9]+/g, '')
+                .replace(/rounded-[a-z0-9]+/g, '')
+                .replace(/shadow-[a-z0-9]+/g, '')
+                .replace(/ring-[0-9]+/g, '')
+                .replace(/mt-[0-9]+/g, '')
+                .replace(/mb-[0-9]+/g, '');
+            }
+
+            // Strip any remaining oklch/color-mix functions from the document's stylesheets 
+            // since html2canvas evaluates all stylesheets and crashes on unknown color functions.
+            const styleTags = doc.querySelectorAll('style');
+            styleTags.forEach(t => {
+              if (t.textContent) {
+                t.textContent = t.textContent
+                  .replace(/oklch\([^)]+\)/gi, 'inherit')
+                  .replace(/color-mix\([^)]+\)/gi, 'inherit');
+              }
+            });
+          }
+        },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] },
+        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+      };
+
+      await html2pdf().from(element).set(opt).save();
+
+      // Restore elements
+      element.className = originalClassName;
+      noPrintElements.forEach((el, index) => {
+        (el as HTMLElement).style.display = hiddenStates[index] || '';
+      });
+      
+      setSuccessMsg("¡Expediente descargado con éxito en formato PDF!");
+      setTimeout(() => setSuccessMsg(null), 5000);
+      
+    } catch (err: any) {
+      console.error("PDF generator fail:", err);
+      setValidationError("Error al generar PDF: " + (err.message || "Error desconocido"));
+      setTimeout(() => setValidationError(null), 6000);
+      
+      const el = document.getElementById('printable-expediente');
+      if (el && typeof el.className !== 'undefined') {
+        el.className = originalClassName;
+        const hiddenEl = el.querySelectorAll('.no-print');
+        hiddenEl.forEach(child => {
+          (child as HTMLElement).style.display = '';
+        });
+      }
+    } finally {
+      setIsGeneratingPdf(false);
+      if (wasDraftModeOff) {
+        setTimeout(() => setShowDraftMode(false), 500);
+      }
     }
   };
 
@@ -583,10 +684,27 @@ export default function HistoryView({
             <button 
               type="button"
               onClick={handlePrintAction}
-              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl font-bold text-xs tracking-wide uppercase shadow-lg shadow-indigo-600/15 transition-all cursor-pointer border border-indigo-550"
+              disabled={isGeneratingPdf}
+              className={`flex items-center justify-center gap-2 px-5 py-2 rounded-xl font-bold text-xs tracking-wide uppercase transition-all border shadow-lg ${
+                isGeneratingPdf
+                  ? 'bg-slate-800 border-slate-700 text-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-550 hover:border-indigo-500 cursor-pointer shadow-indigo-600/15'
+              }`}
             >
-              <Printer className="w-4 h-4 text-white" />
-              Imprimir Expediente
+              {isGeneratingPdf ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generando PDF...
+                </>
+              ) : (
+                <>
+                  <Printer className="w-4 h-4 text-white" />
+                  Imprimir / PDF
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -1301,7 +1419,7 @@ export default function HistoryView({
                       <td className="py-2 px-2 font-bold uppercase text-slate-700">{r.serviceType}</td>
                       <td className="py-2 px-2 text-justify">
                         <p className="font-semibold leading-tight">{r.summary}</p>
-                        <p className="text-[9px] text-slate-500 mt-0.5 font-mono">Reportado en: {r.unitPlates || 'N/A' || 'Estación Central'} • Estatus: Validado</p>
+                        <p className="text-[9px] text-slate-600 mt-0.5 font-mono"><strong className="font-semibold">Unidad de Respuesta:</strong> Estación Central USM • <strong className="font-semibold">Estatus del Servicio:</strong> Validado / Concluido</p>
                       </td>
                     </tr>
                   ))}
