@@ -276,24 +276,16 @@ export default function HistoryView({
             const first = sessionUser.firstName || sessionUser.name.split(' ')[0] || '';
             const last = sessionUser.lastName || sessionUser.name.split(' ').slice(1).join(' ') || '';
 
-            const response = await fetch('/api/auth/update-profile', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                username: sessionUser.username,
-                firstName: first,
-                lastName: last,
-                personnelId: sessionUser.personnelId,
-                bloodType: sessionUser.bloodType || 'O+',
-                photoBase64: base64Content
-              })
+            const data = await window.electronAPI.updateProfile({
+              username: sessionUser.username,
+              firstName: first,
+              lastName: last,
+              personnelId: sessionUser.personnelId,
+              bloodType: sessionUser.bloodType || 'O+',
+              photoBase64: base64Content
             });
-
-            const data = await response.json();
-            if (!response.ok) {
-              throw new Error(data.error || 'No se pudo guardar la foto de perfil en el servidor.');
+            if (data.error) {
+              throw new Error(data.error);
             }
 
             onUpdateProfile(data);
@@ -355,25 +347,17 @@ export default function HistoryView({
     }
 
     try {
-      const response = await fetch('/api/auth/update-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          username: sessionUser.username,
-          firstName: first,
-          lastName: last,
-          personnelId: formattedPersonnelId,
-          bloodType: editBloodType,
-          photoBase64: sessionUser.photoBase64
-        })
+      const data = await window.electronAPI.updateProfile({
+        username: sessionUser.username,
+        firstName: first,
+        lastName: last,
+        personnelId: formattedPersonnelId,
+        bloodType: editBloodType,
+        photoBase64: sessionUser.photoBase64
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error de sincronización.');
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       onUpdateProfile(data);

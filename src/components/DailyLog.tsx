@@ -4,15 +4,22 @@ import { ServiceRecord, UserProfile } from '../types';
 
 interface DailyLogProps {
   onSaveRecord: (record: Omit<ServiceRecord, 'id' | 'timestamp'>) => void;
-  isOnline: boolean;
   sessionUser?: UserProfile | null;
 }
 
-export default function DailyLog({ onSaveRecord, isOnline, sessionUser }: DailyLogProps) {
+const getTodayLocalDate = (): string => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export default function DailyLog({ onSaveRecord, sessionUser }: DailyLogProps) {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    serviceDate: new Date().toISOString().substring(0, 10),
+    serviceDate: getTodayLocalDate(),
     serviceType: '',
     summary: '',
     status: 'Completed' as 'Completed' | 'Active' | 'Pending Review'
@@ -169,7 +176,7 @@ export default function DailyLog({ onSaveRecord, isOnline, sessionUser }: DailyL
       setFormData({
         firstName: '',
         lastName: '',
-        serviceDate: new Date().toISOString().substring(0, 10),
+        serviceDate: getTodayLocalDate(),
         serviceType: '',
         summary: '',
         status: 'Completed'
@@ -190,9 +197,7 @@ export default function DailyLog({ onSaveRecord, isOnline, sessionUser }: DailyL
 
       setNotification({
         type: 'success',
-        message: isOnline 
-          ? 'Registro de servicio enviado y guardado exitosamente en el servidor central.' 
-          : 'Sin conexión a internet: Registro guardado localmente de forma segura. Se sincronizará automáticamente cuando vuelva la conexión.'
+        message: 'Registro de servicio guardado localmente de forma segura en la base de datos.'
       });
 
       // Clear notification after 5s
@@ -214,7 +219,7 @@ export default function DailyLog({ onSaveRecord, isOnline, sessionUser }: DailyL
       setFormData({
         firstName: cleanFirst.toUpperCase(),
         lastName: cleanLast.toUpperCase(),
-        serviceDate: new Date().toISOString().substring(0, 10),
+        serviceDate: getTodayLocalDate(),
         serviceType: '',
         summary: '',
         status: 'Completed'
@@ -232,7 +237,7 @@ export default function DailyLog({ onSaveRecord, isOnline, sessionUser }: DailyL
       setFormData({
         firstName: '',
         lastName: '',
-        serviceDate: new Date().toISOString().substring(0, 10),
+        serviceDate: getTodayLocalDate(),
         serviceType: '',
         summary: '',
         status: 'Completed'
@@ -267,22 +272,6 @@ export default function DailyLog({ onSaveRecord, isOnline, sessionUser }: DailyL
         </div>
       )}
 
-      {/* Connection Indicator in Form Card */}
-      <div className={`mb-4 px-4 py-3 rounded-xl flex items-center justify-between text-[11px] font-bold uppercase tracking-wider ${
-        isOnline 
-          ? 'bg-emerald-500/5 text-emerald-400 border border-emerald-500/10' 
-          : 'bg-amber-500/5 text-amber-400 border border-amber-500/10 animate-pulse'
-      }`}>
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)]' : 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.7)]'}`} />
-          <span>Modo de Operación: {isOnline ? 'EN LÍNEA (Servidor de Red Operativo)' : 'FUERA DE LÍNEA (Guardando en BD Local)'}</span>
-        </div>
-        <span className="text-[10px] text-slate-400 font-semibold hidden md:inline">
-          {isOnline 
-            ? 'Datos enviados directo a la base de datos central' 
-            : 'Cola deferida sincronizará automáticamente'}
-        </span>
-      </div>
 
       {/* Security Info banner */}
       <div className="mb-4 px-4 py-3 rounded-xl bg-indigo-950/10 border border-indigo-900/30 flex items-center gap-2.5 text-[11px] text-indigo-300 font-medium">

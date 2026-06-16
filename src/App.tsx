@@ -11,8 +11,6 @@ import {
   Bell, 
   User, 
   Search, 
-  Wifi, 
-  WifiOff, 
   AlertCircle,
   Clock,
   RefreshCw,
@@ -48,7 +46,7 @@ export default function App() {
   const handleLogout = () => {
     setSessionUser(null);
     localStorage.removeItem('session_user');
-    setGlobalNotification("Sesión cerrada correctamente. Regrese pronto.");
+    setGlobalNotification("Sesión cerrada correctamente.");
     setTimeout(() => setGlobalNotification(null), 5000);
   };
 
@@ -59,337 +57,119 @@ export default function App() {
     setTimeout(() => setGlobalNotification(null), 4000);
   };
 
-  // Connection state
-  const [isOnline, setIsOnline] = useState<boolean>(true);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  // Notification state
   const [globalNotification, setGlobalNotification] = useState<string | null>(null);
 
   // Core Data Lists
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [milestones, setMilestones] = useState<HumanMilestone[]>([]);
-  
-  // Track offline cached records count
-  const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
 
-  // Load records and milestones either from API or localStorage fallback
-  const loadData = useCallback(async (bypassCacheCheck = false) => {
-    // 1. Get offline cache status first
-    const offlineQueue = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-    setPendingSyncCount(offlineQueue.length);
-
-    if (isOnline) {
-      try {
-        const recordsRes = await fetch('/api/records');
-        if (recordsRes.ok) {
-          const loadedRecords: ServiceRecord[] = await recordsRes.json();
-          // Merge client-local copies that are unsynced in-memory so user sees them
-          const merged = [...offlineQueue, ...loadedRecords.filter(r => !offlineQueue.some((o: ServiceRecord) => o.id === r.id))];
-          setRecords(merged);
-          localStorage.setItem('local_records_backup', JSON.stringify(loadedRecords));
-        }
-
-        const milestonesRes = await fetch('/api/milestones');
-        if (milestonesRes.ok) {
-          const loadedMilestones = await milestonesRes.json();
-          setMilestones(loadedMilestones);
-          localStorage.setItem('local_milestones_backup', JSON.stringify(loadedMilestones));
-        }
-      } catch (err) {
-        console.warn('API error, falling back to local cache data:', err);
-        loadFromLocalCache();
-      }
-    } else {
-      loadFromLocalCache();
+  // Load records and milestones from SQLite database via Electron IPC
+  const loadData = useCallback(async () => {
+    try {
+      const loadedRecords = await window.electronAPI.getRecords();
+      setRecords(loadedRecords || []);
+      
+      const loadedMilestones = await window.electronAPI.getMilestones();
+      setMilestones(loadedMilestones || []);
+    } catch (err) {
+      console.error('Failed to load SQLite data:', err);
     }
-  }, [isOnline]);
-
-  const loadFromLocalCache = () => {
-    const backupRecords = JSON.parse(localStorage.getItem('local_records_backup') || '[]');
-    const offlineQueue: ServiceRecord[] = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-    // Uniquely merge
-    const merged = [...offlineQueue, ...backupRecords.filter((r: ServiceRecord) => !offlineQueue.some(o => o.id === r.id))];
-    setRecords(merged);
-
-    const backupMilestones = JSON.parse(localStorage.getItem('local_milestones_backup') || '[]');
-    setMilestones(backupMilestones);
-    setPendingSyncCount(offlineQueue.length);
-  };
+  }, []);
 
   // Initialize data on boot
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Synchronize local offline submissions to server
-  const triggerSynchronization = async () => {
-    if (!isOnline) {
-      alert("No se puede sincronizar mientras el simulador esté fuera de línea.");
-      return;
-    }
-
-    const offlineQueue: ServiceRecord[] = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-    if (offlineQueue.length === 0) {
-      return;
-    }
-
-    setIsSyncing(true);
-    try {
-      const response = await fetch('/api/records/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(offlineQueue)
-      });
-
-      if (response.ok) {
-        // Clear queue
-        localStorage.removeItem('off_records_queue');
-        setPendingSyncCount(0);
-        
-        // Notify
-        setGlobalNotification(`Exito: Sincronizados de forma segura ${offlineQueue.length} registros offline con el servidor central.`);
-        setTimeout(() => setGlobalNotification(null), 6000);
-        
-        // Reload all
-        await loadData();
-      } else {
-        alert("El servidor central rechazó la sincronización por lote. Intente de nuevo.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Fallo de comunicación con la base de datos central al sincronizar.");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // Handle Offline <--> Online simulation toggle
-  const handleToggleConnection = () => {
-    const nextState = !isOnline;
-    setIsOnline(nextState);
-    
-    if (nextState) {
-      setGlobalNotification("Conectividad Restablecida. El sistema de base de datos detectó red estable y está listo para sincronizar.");
-    } else {
-      setGlobalNotification("Modo Fuera de Línea Activado. Todas las operaciones ahora se guardarán localmente.");
-    }
-    setTimeout(() => setGlobalNotification(null), 5000);
-  };
-
-  // Automatically sync when restoring connection
-  useEffect(() => {
-    if (isOnline && pendingSyncCount > 0) {
-      triggerSynchronization();
-    }
-  }, [isOnline, pendingSyncCount]);
-
-  // API Call handlers
+  // IPC Call handlers
   const handleSaveRecord = async (newRecordFields: Omit<ServiceRecord, 'id' | 'timestamp'>) => {
-    const tempId = `srv-temp-${Date.now()}`;
-    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    const fullRecord: ServiceRecord = {
-      ...newRecordFields,
-      id: tempId,
-      timestamp,
-      synced: false
-    };
-
-    if (isOnline) {
-      try {
-        const response = await fetch('/api/records', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...fullRecord, synced: undefined }) // strip synced flag for server save
-        });
-
-        if (response.ok) {
-          const savedRecord = await response.json();
-          // Update in memory list
-          setRecords(prev => [savedRecord, ...prev]);
-          // Refresh background backups
-          loadData();
-          return;
-        }
-      } catch (err) {
-        console.warn('Network save failed, saving to offline buffer:', err);
+    try {
+      const savedRecord = await window.electronAPI.addRecord(newRecordFields);
+      if (savedRecord.error) {
+        alert(savedRecord.error);
+        return;
       }
+      setRecords(prev => [savedRecord, ...prev]);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al guardar el registro en la base de datos local.');
     }
-
-    // Offline / Fallback logic: Cache directly in localStorage queue
-    const offlineQueue: ServiceRecord[] = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-    offlineQueue.push(fullRecord);
-    localStorage.setItem('off_records_queue', JSON.stringify(offlineQueue));
-    setPendingSyncCount(offlineQueue.length);
-
-    // Update state directly so the UI is active and immediate!
-    setRecords(prev => [fullRecord, ...prev]);
   };
 
   const handleUpdateRecord = async (id: string, updatedFields: Partial<ServiceRecord>) => {
-    // Optimistic offline update (helps when editing records offline)
-    const isTempId = id.startsWith('srv-temp-');
-    
-    if (isTempId) {
-      // Modify local buffer
-      const offlineQueue: ServiceRecord[] = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-      const index = offlineQueue.findIndex(r => r.id === id);
-      if (index !== -1) {
-        offlineQueue[index] = { ...offlineQueue[index], ...updatedFields };
-        localStorage.setItem('off_records_queue', JSON.stringify(offlineQueue));
+    try {
+      const result = await window.electronAPI.updateRecord(id, updatedFields);
+      if (result.error) {
+        alert(result.error);
+        return;
       }
-      setRecords(prev => prev.map(r => r.id === id ? { ...r, ...updatedFields } : r));
-      return;
-    }
-
-    if (isOnline) {
-      try {
-        const response = await fetch(`/api/records/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedFields)
-        });
-        if (response.ok) {
-          await loadData();
-          return;
-        }
-      } catch (err) {
-        console.error('Failed to update record on server', err);
-      }
-    }
-
-    // Fallback: save update details as synced false locally
-    setRecords(prev => prev.map(r => r.id === id ? { ...r, ...updatedFields, synced: false } : r));
-    const offlineQueue: ServiceRecord[] = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-    const existing = offlineQueue.find(r => r.id === id);
-    if (!existing) {
-      const record = records.find(r => r.id === id);
-      if (record) {
-        offlineQueue.push({ ...record, ...updatedFields, synced: false });
-        localStorage.setItem('off_records_queue', JSON.stringify(offlineQueue));
-        setPendingSyncCount(offlineQueue.length);
-      }
+      await loadData();
+    } catch (err) {
+      console.error('Failed to update record:', err);
     }
   };
 
   const handleDeleteRecord = async (id: string) => {
-    const isTempId = id.startsWith('srv-temp-');
-
-    if (isTempId) {
-      // Remove from offline buffer
-      let offlineQueue: ServiceRecord[] = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-      offlineQueue = offlineQueue.filter(r => r.id !== id);
-      localStorage.setItem('off_records_queue', JSON.stringify(offlineQueue));
-      setPendingSyncCount(offlineQueue.length);
-      setRecords(prev => prev.filter(r => r.id !== id));
-      return;
-    }
-
-    if (isOnline) {
-      try {
-        const response = await fetch(`/api/records/${id}`, { method: 'DELETE' });
-        if (response.ok) {
-          await loadData();
-          return;
-        }
-      } catch (err) {
-        console.error('Failed to delete on server', err);
+    try {
+      const result = await window.electronAPI.deleteRecord(id);
+      if (result.error) {
+        alert(result.error);
+        return;
       }
+      await loadData();
+    } catch (err) {
+      console.error('Failed to delete record:', err);
     }
-
-    // If offline, flag it of local removal
-    setRecords(prev => prev.filter(r => r.id !== id));
-    // Remove if it's already in queue
-    let offlineQueue: ServiceRecord[] = JSON.parse(localStorage.getItem('off_records_queue') || '[]');
-    offlineQueue = offlineQueue.filter(r => r.id !== id);
-    localStorage.setItem('off_records_queue', JSON.stringify(offlineQueue));
-    setPendingSyncCount(offlineQueue.length);
   };
 
   // Personnel Milestones Management
   const handleAddMilestone = async (newMilestoneFields: Omit<HumanMilestone, 'id'>) => {
-    const tempId = `m-temp-${Date.now()}`;
-    const fullMilestone: HumanMilestone = {
-      ...newMilestoneFields,
-      id: tempId
-    };
-
-    if (isOnline) {
-      try {
-        const response = await fetch('/api/milestones', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(fullMilestone)
-        });
-        if (response.ok) {
-          loadData();
-          return;
-        }
-      } catch (err) {
-        console.error(err);
+    try {
+      const savedMilestone = await window.electronAPI.addMilestone(newMilestoneFields);
+      if (savedMilestone.error) {
+        alert(savedMilestone.error);
+        return;
       }
+      await loadData();
+    } catch (err) {
+      console.error('Failed to add milestone:', err);
     }
-
-    // Save offline backup
-    const backupMilestones = JSON.parse(localStorage.getItem('local_milestones_backup') || '[]');
-    backupMilestones.unshift(fullMilestone);
-    localStorage.setItem('local_milestones_backup', JSON.stringify(backupMilestones));
-    setMilestones(prev => [fullMilestone, ...prev]);
   };
 
   const handleDeleteMilestone = async (id: string) => {
-    if (isOnline) {
-      try {
-        const response = await fetch(`/api/milestones/${id}`, { method: 'DELETE' });
-        if (response.ok) {
-          loadData();
-          return;
-        }
-      } catch (err) {
-        console.error(err);
+    try {
+      const result = await window.electronAPI.deleteMilestone(id);
+      if (result.error) {
+        alert(result.error);
+        return;
       }
+      await loadData();
+    } catch (err) {
+      console.error('Failed to delete milestone:', err);
     }
-
-    setMilestones(prev => prev.filter(m => m.id !== id));
-    const backupMilestones = JSON.parse(localStorage.getItem('local_milestones_backup') || '[]');
-    const filtered = backupMilestones.filter((m: HumanMilestone) => m.id !== id);
-    localStorage.setItem('local_milestones_backup', JSON.stringify(filtered));
   };
 
-  // Force database reset on server
+  // Force database reset in SQLite
   const handleForceReset = async () => {
-    if (isOnline) {
-      try {
-        const res = await fetch('/api/reset', { method: 'POST' });
-        if (res.ok) {
-          localStorage.removeItem('off_records_queue');
-          localStorage.removeItem('local_records_backup');
-          localStorage.removeItem('local_milestones_backup');
-          setPendingSyncCount(0);
-          await loadData();
-          setGlobalNotification("Sincronización exitosa: Base de datos central reseteada e inicializada con 248 registros oficiales.");
-          setTimeout(() => setGlobalNotification(null), 5000);
-        }
-      } catch (e) {
-        console.error(e);
+    try {
+      const result = await window.electronAPI.resetDatabase();
+      if (result.error) {
+        alert(result.error);
+        return;
       }
-    } else {
-      // Offline local reset
-      localStorage.removeItem('off_records_queue');
-      localStorage.removeItem('local_records_backup');
-      localStorage.removeItem('local_milestones_backup');
-      setPendingSyncCount(0);
-      loadFromLocalCache();
-      alert("Se limpió la base de datos offline local de su navegador.");
+      await loadData();
+      setGlobalNotification("Sincronización exitosa: Base de datos local re-inicializada con 248 registros oficiales.");
+      setTimeout(() => setGlobalNotification(null), 5000);
+    } catch (e) {
+      console.error(e);
+      alert('Error al resetear la base de datos.');
     }
-  };
-
-  // Dispatch alert simulator
-  const handleDispatchAlert = () => {
-    alert("📢 ALERTA TÁCTICA DESPACHO: Desplegando Unidad Rescue 3 - Incidente de rescate de emergencia en desarrollo.");
   };
 
   if (!sessionUser) {
-    return <AuthPortal onLoginSuccess={handleLoginSuccess} isOnline={isOnline} />;
+    return <AuthPortal onLoginSuccess={handleLoginSuccess} />;
   }
 
   return (
@@ -471,7 +251,7 @@ export default function App() {
 
         </ul>
 
-        {/* Footer menu layout mapping back to screenshots */}
+        {/* Footer menu */}
         <ul className="mt-auto border-t border-slate-800/60 py-4 px-2 space-y-1 block p-0 list-none font-sans">
           
           <li>
@@ -484,15 +264,13 @@ export default function App() {
               }`}
             >
               <SettingsIcon className="w-4 h-4 shrink-0" />
-              Ajustes de Red
+              Ajustes de BD / Nube
             </button>
           </li>
 
-
-
         </ul>
 
-        {/* Active User Session Details card inside sidebar footer */}
+        {/* Active User Session Details */}
         <div className="p-4 bg-slate-950/45 border-t border-slate-800/65">
           <div className="flex items-center gap-3">
             {sessionUser?.photoBase64 ? (
@@ -531,39 +309,20 @@ export default function App() {
 
       </nav>
 
-      {/* 2. CHOOSE CORRESPONDING MAIN CONTENT WIDTH OFFSET (ML-260px) */}
+      {/* 2. MAIN CONTENT AREA ml-[260px] */}
       <div className="flex-1 ml-[260px] flex flex-col min-h-screen bg-[#020617]">
         
-        {/* 3. CORE PAGE CANVAS (Padding container from 16 h-offset) */}
+        {/* 3. CORE PAGE CANVAS */}
         <main className="flex-1 p-8 bg-[#020617]">
           
-          {/* Global Alert Notices (Synchronization prompts) */}
+          {/* Global Alert Notices */}
           {globalNotification && (
             <div className="mb-6 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 flex items-start gap-3 animate-fade-in shadow-xs">
               <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-indigo-400" />
               <div className="text-xs">
-                <p className="font-bold uppercase tracking-wider text-indigo-400">Aviso del Servidor</p>
+                <p className="font-bold uppercase tracking-wider text-indigo-400">Notificación del Sistema</p>
                 <p className="mt-1 leading-relaxed font-semibold">{globalNotification}</p>
               </div>
-            </div>
-          )}
-
-          {/* Synchronized local buffer pending count prompt */}
-          {pendingSyncCount > 0 && isOnline && (
-            <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200 flex items-center justify-between gap-4 animate-pulse shadow-xs">
-              <div className="flex items-center gap-3 text-xs">
-                <AlertCircle className="w-5 h-5 shrink-0 text-amber-400" />
-                <div>
-                  <p className="font-bold uppercase tracking-wider text-amber-400">Registros acumulados fuera de línea</p>
-                  <p className="mt-0.5 font-semibold text-amber-300">Se guardaron de forma segura <span className="font-bold underline text-amber-400">{pendingSyncCount} incidentes</span> en la cola de su navegador. El servidor de red ya está recuperado.</p>
-                </div>
-              </div>
-              <button
-                onClick={triggerSynchronization}
-                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] tracking-wider uppercase px-4 py-2 rounded-xl transition-all shrink-0 cursor-pointer shadow-[0_0_12px_rgba(217,119,6,0.25)] border-0"
-              >
-                Sincronizar Ya
-              </button>
             </div>
           )}
 
@@ -571,7 +330,6 @@ export default function App() {
           {currentTab === 'daily_log' && (
             <DailyLog 
               onSaveRecord={handleSaveRecord} 
-              isOnline={isOnline} 
               sessionUser={sessionUser}
             />
           )}
@@ -603,13 +361,9 @@ export default function App() {
 
           {currentTab === 'settings' && (
             <SettingsPage 
-              isOnline={isOnline}
-              onToggleConnection={handleToggleConnection}
-              pendingSyncCount={pendingSyncCount}
-              onManualSync={triggerSynchronization}
               onForceReset={handleForceReset}
               dbTotalCount={records.length}
-              isSyncing={isSyncing}
+              onDbModified={loadData}
             />
           )}
 

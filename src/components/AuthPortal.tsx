@@ -5,10 +5,9 @@ import USMLogo from './USMLogo';
 
 interface AuthPortalProps {
   onLoginSuccess: (user: UserProfile) => void;
-  isOnline: boolean;
 }
 
-export default function AuthPortal({ onLoginSuccess, isOnline }: AuthPortalProps) {
+export default function AuthPortal({ onLoginSuccess }: AuthPortalProps) {
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   
   // Form States
@@ -161,18 +160,10 @@ export default function AuthPortal({ onLoginSuccess, isOnline }: AuthPortalProps
           lastName: cleanLastName
         };
 
-        const response = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
+        const data = await window.electronAPI.register(payload);
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Ocurrió un error inesperado al procesar.');
+        if (data.error) {
+          throw new Error(data.error);
         }
 
         setSuccess('¡Cuenta oficial registrada con éxito! Redirigiendo a inicio de sesión...');
@@ -190,18 +181,10 @@ export default function AuthPortal({ onLoginSuccess, isOnline }: AuthPortalProps
     } else {
       // Login flow
       try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ username: cleanUsername, password: cleanPassword }),
-        });
+        const data = await window.electronAPI.login(cleanUsername, cleanPassword);
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Credenciales inválidas o error de conexión.');
+        if (data.error) {
+          throw new Error(data.error);
         }
 
         // Logged in!
@@ -236,15 +219,6 @@ export default function AuthPortal({ onLoginSuccess, isOnline }: AuthPortalProps
           </p>
         </div>
 
-        {/* Offline notice check */}
-        {!isOnline && (
-          <div className="mb-6 p-3 rounded-xl bg-orange-950/40 border border-orange-850/50 flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-            <div className="text-[11px] font-medium text-orange-300 leading-relaxed">
-              <strong>Fuera de Línea (Offline):</strong> El sistema requiere conexión con el servidor para verificar las credenciales de seguridad en tiempo real.
-            </div>
-          </div>
-        )}
 
         {/* Security / Injection Filter Information Banner */}
         <div className="mb-6 px-3.5 py-2.5 rounded-xl bg-indigo-950/20 border border-indigo-900/40 flex items-start gap-2.5">

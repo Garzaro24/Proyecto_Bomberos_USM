@@ -1,146 +1,219 @@
-import React from 'react';
-import { Wifi, WifiOff, RefreshCw, Database, Trash2, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Wifi, WifiOff, RefreshCw, Database, Trash2, ShieldAlert, Cloud, CloudLightning, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface SettingsPageProps {
-  isOnline: boolean;
-  onToggleConnection: () => void;
-  pendingSyncCount: number;
-  onManualSync: () => Promise<void>;
   onForceReset: () => Promise<void>;
   dbTotalCount: number;
-  isSyncing: boolean;
+  onDbModified: () => void;
 }
 
 export default function SettingsPage({
-  isOnline,
-  onToggleConnection,
-  pendingSyncCount,
-  onManualSync,
   onForceReset,
   dbTotalCount,
-  isSyncing
+  onDbModified
 }: SettingsPageProps) {
+  const [dbPath, setDbPath] = useState<string>('Obteniendo ruta...');
+  const [hasInternet, setHasInternet] = useState<boolean>(false);
+  const [unsyncedCount, setUnsyncedCount] = useState<number>(0);
+  const [syncDetails, setSyncDetails] = useState<any>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const checkConnectionAndStatus = async () => {
+    try {
+      const internet = await window.electronAPI.checkInternetConnection();
+      setHasInternet(internet);
+
+      const status = await window.electronAPI.getCloudStatus();
+      if (!status.error) {
+        setUnsyncedCount(status.unsyncedCount);
+        setSyncDetails(status.details);
+      }
+    } catch (e) {
+      console.error('Failed to get status:', e);
+    }
+  };
+
+  useEffect(() => {
+    // Get DB Path
+    window.electronAPI.getDbPath().then(path => setDbPath(path || 'No disponible'));
+
+    // Immediate check
+    checkConnectionAndStatus();
+
+    // Check periodically
+    const interval = setInterval(checkConnectionAndStatus, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleManualBackup = async () => {
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await window.electronAPI.cloudBackupNow();
+      if (result.success) {
+        setSyncResult({
+          type: 'success',
+          message: `Respaldo completado. Sincronizados: ${result.recordsSynced} registros, ${result.milestonesSynced} hitos.`
+        });
+        // Refresh status
+        checkConnectionAndStatus();
+        onDbModified();
+      } else {
+        setSyncResult({
+          type: 'error',
+          message: result.message || 'Error desconocido al respaldar.'
+        });
+      }
+    } catch (err: any) {
+      setSyncResult({
+        type: 'error',
+        message: err.message || 'Fallo de comunicación con el proceso de sincronización.'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   return (
-    <div className="animate-fade-in space-y-6 max-w-4xl mx-auto">
+    <div className="animate-fade-in space-y-6 max-w-4xl mx-auto font-sans">
       <div className="mb-6">
-        <h2 className="text-3xl font-bold tracking-tight text-slate-900 font-sans">Panel de Configuración de Red y Sincronización</h2>
-        <p className="text-gray-500 mt-2 text-base">Consola técnica para ensayar la persistencia local y emular operaciones fuera de línea (offline) en ubicaciones rurales o sin red.</p>
+        <h2 className="text-3xl font-bold tracking-tight text-slate-100 font-sans">Panel de Base de Datos y Respaldo en la Nube</h2>
+        <p className="text-slate-400 mt-2 text-base">Consola operativa para administrar la base de datos SQLite local y gestionar la replicación de seguridad en la nube.</p>
       </div>
 
-      {/* Connection Simulator Console */}
-      <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Simulador de Conexión en Campo</h3>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              {isOnline ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  <Wifi className="w-4 h-4 text-emerald-600 animate-pulse" />
-                  Conexión Estable (Online)
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                  <WifiOff className="w-4 h-4 text-amber-600" />
-                  Operación Fuera de Línea (Offline)
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-              Use este interruptor para simular la pérdida de conectividad a internet en campo. Cuando está **Offline**, todos los registros de incidentes se almacenan de manera local y encriptada en la base de datos del navegador.
-            </p>
+      {syncResult && (
+        <div className={`p-4 rounded-xl flex items-start gap-3 border ${
+          syncResult.type === 'success' 
+            ? 'bg-emerald-950/30 text-emerald-200 border-emerald-500/20' 
+            : 'bg-rose-950/30 text-rose-200 border-rose-500/20'
+        }`}>
+          {syncResult.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0 text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-rose-400" />
+          )}
+          <div>
+            <p className="font-bold uppercase tracking-wider text-xs">{syncResult.type === 'success' ? 'Éxito' : 'Fallo'}</p>
+            <p className="text-sm mt-1 text-slate-350">{syncResult.message}</p>
           </div>
-          <button
-            onClick={onToggleConnection}
-            className={`px-5 py-2.5 rounded font-bold text-xs uppercase tracking-wider transition-all shadow-sm shrink-0 cursor-pointer ${
-              isOnline 
-                ? 'bg-amber-600 text-white hover:bg-amber-700' 
-                : 'bg-emerald-600 text-white hover:bg-emerald-700'
-            }`}
-          >
-            {isOnline ? "Desconectar Simulador" : "Restablecer Conexión"}
-          </button>
         </div>
-      </div>
+      )}
 
-      {/* Synchronization Engine Queue Stats */}
+      {/* Connection and Sync Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Sync panel */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col justify-between">
+        {/* Local Database Stats Card */}
+        <div className="bg-[#0f172a]/30 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
           <div>
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2 border-b border-slate-100 pb-2">Motor de Red Undundante</h3>
-            <div className="space-y-4 mt-3">
-              <div className="flex justify-between items-center bg-slate-50 p-3 rounded border border-slate-150">
-                <span className="text-xs font-semibold text-slate-600">Registros en Cola Local Pendientes:</span>
-                <span className={`font-mono font-bold text-sm px-2.5 py-0.5 rounded-full ${
-                  pendingSyncCount > 0 
-                    ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-bounce' 
-                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                }`}>
-                  {pendingSyncCount}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Los datos guardados fuera de línea se acumularán en la memoria relacional buffer. Tan pronto dectectemos una transición en línea de vuelta, el motor activará la sincronización por bloques.
-              </p>
+            <div className="flex items-center gap-2 border-b border-slate-800/60 pb-3 mb-4">
+              <Database className="w-5 h-5 text-indigo-400" />
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Base de Datos Local (SQLite)</h3>
             </div>
-          </div>
-          
-          <div className="mt-6">
-            <button
-              onClick={onManualSync}
-              disabled={pendingSyncCount === 0 || !isOnline || isSyncing}
-              className="w-full bg-slate-900 border border-slate-900 text-white rounded py-2.5 text-xs font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? "Sincronizando..." : "Sincronizar Cola Local Ahora"}
-            </button>
-          </div>
-        </div>
-
-        {/* Relational DB stats */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2 border-b border-slate-100 pb-2">Base de Datos Centralizada (Servidor)</h3>
-            <div className="space-y-4 mt-3">
-              <div className="flex justify-between items-center bg-slate-50 p-3 rounded border border-slate-150">
-                <span className="text-xs font-semibold text-slate-600">Registros Totales Consolidados:</span>
-                <span className="font-mono font-bold text-sm bg-slate-200 text-slate-800 px-2.5 py-0.5 rounded-full">
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/50">
+                <span className="text-xs font-semibold text-slate-400">Registros Totales (Bitácora):</span>
+                <span className="font-mono font-bold text-sm bg-indigo-950/50 text-indigo-300 px-3 py-1 rounded-full border border-indigo-900/30">
                   {dbTotalCount}
                 </span>
               </div>
-              <div className="flex items-start gap-1.5 text-[11px] text-gray-500">
-                <Database className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
-                <p>Ubicación física: <span className="font-mono text-slate-700">database/records.json</span></p>
+
+              <div className="text-xs text-slate-450 leading-relaxed space-y-1">
+                <p className="font-bold uppercase tracking-wider text-[10px] text-slate-500">Ruta del archivo local:</p>
+                <div className="bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/60 font-mono text-[10px] text-slate-300 break-all select-text">
+                  {dbPath}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-6">
+          <div className="mt-8 pt-4 border-t border-slate-800/40">
             <button
               onClick={() => {
-                if(confirm("¿Está seguro que desea borrar toda la base de datos operativa y re-sembrar los 248 registros iniciales?")) {
-                  onForceReset();
+                if(confirm("¿Está seguro de que desea borrar toda la base de datos local y regenerar los 248 registros simulados de prueba?")) {
+                  onForceReset().then(onDbModified);
                 }
               }}
-              className="w-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded py-2.5 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full bg-rose-950/15 hover:bg-rose-950/45 border border-rose-900/40 text-rose-300 hover:text-rose-250 rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer outline-none"
             >
-              <Trash2 className="w-4 h-4 text-rose-700" />
-              Restablecer BD & Re-Sembrar Mock
+              <Trash2 className="w-4 h-4 text-rose-450" />
+              Limpiar y Re-Sembrar Base de Datos
+            </button>
+          </div>
+        </div>
+
+        {/* Cloud Sync Backup Card */}
+        <div className="bg-[#0f172a]/30 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 border-b border-slate-800/60 pb-3 mb-4">
+              <Cloud className="w-5 h-5 text-indigo-400" />
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Respaldo en la Nube (Firestore)</h3>
+            </div>
+
+            <div className="space-y-4">
+              {/* Internet detection */}
+              <div className="flex justify-between items-center bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/50">
+                <span className="text-xs font-semibold text-slate-400">Estado de Conexión:</span>
+                {hasInternet ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-emerald-950/30 text-emerald-350 border border-emerald-900/40 uppercase">
+                    <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                    Online
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-amber-950/30 text-amber-350 border border-amber-900/40 uppercase">
+                    <WifiOff className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                    Offline (Local)
+                  </span>
+                )}
+              </div>
+
+              {/* Sync queue count */}
+              <div className="flex justify-between items-center bg-slate-950/50 p-3.5 rounded-xl border border-slate-800/50">
+                <span className="text-xs font-semibold text-slate-400">Pendientes por Respaldar:</span>
+                <span className={`font-mono font-bold text-sm px-3 py-1 rounded-full border ${
+                  unsyncedCount > 0 
+                    ? 'bg-amber-950/30 text-amber-300 border-amber-900/40' 
+                    : 'bg-emerald-950/30 text-emerald-300 border-emerald-900/40'
+                }`}>
+                  {unsyncedCount}
+                </span>
+              </div>
+
+              {syncDetails && unsyncedCount > 0 && (
+                <div className="bg-slate-950/20 p-2.5 rounded-xl border border-slate-800/40 text-[10px] font-semibold text-slate-500 uppercase tracking-wider space-y-1">
+                  <span className="block text-slate-400 text-[9px]">Detalle pendientes:</span>
+                  <div className="flex gap-4">
+                    <span>Registros: {syncDetails.records || 0}</span>
+                    <span>Hitos: {syncDetails.milestones || 0}</span>
+                    <span>Usuarios: {syncDetails.users || 0}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 pt-4 border-t border-slate-800/40">
+            <button
+              onClick={handleManualBackup}
+              disabled={unsyncedCount === 0 || !hasInternet || isSyncing}
+              className="w-full bg-indigo-650 hover:bg-indigo-600 disabled:bg-slate-800/55 disabled:text-slate-500 border-0 text-white rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:pointer-events-none outline-none"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-white' : 'text-indigo-200'}`} />
+              {isSyncing ? "Respaldando..." : "Subir Respaldo a la Nube"}
             </button>
           </div>
         </div>
 
       </div>
 
-      {/* Guide Card Box */}
-      <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-lg flex items-start gap-3">
-        <ShieldAlert className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-        <div className="text-xs text-blue-900 leading-relaxed">
-          <p className="font-bold uppercase tracking-wider mb-1 text-[11px]">Nota del Sistema de Respaldo Redundante</p>
+      {/* Informative Guidance Card */}
+      <div className="p-4 bg-indigo-950/10 border border-indigo-900/30 rounded-2xl flex items-start gap-3 shadow-md">
+        <ShieldAlert className="w-5 h-5 text-indigo-400 mt-0.5 shrink-0" />
+        <div className="text-xs text-indigo-300 leading-relaxed">
+          <p className="font-bold uppercase tracking-wider mb-1 text-[10px] text-indigo-200">Arquitectura de Sincronización Local-Primero</p>
           <p>
-            Esta demostración utiliza un motor backend en Express de almacenamiento JSON transaccional para simular una base de datos local relacional local de forma ultra segura. Su diseño es idéntico al comportamiento que tiene una base de datos MySQL local empotrada de escritorio.
+            El sistema opera localmente de forma independiente sin depender de internet. Los reportes se almacenan de inmediato en la base de datos SQLite. Cuando el equipo detecta conexión, se habilita el respaldo hacia la base de datos Firebase Firestore en la nube para resguardo y reportes consolidados.
           </p>
         </div>
       </div>

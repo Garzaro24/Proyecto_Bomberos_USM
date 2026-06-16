@@ -1,0 +1,19 @@
+directories:
+  output: release
+  buildResources: build
+appId: com.usm.bomberos
+productName: Bomberos USM
+files:
+  - filter:
+      - dist/**/*
+      - electron/**/*
+      - package.json
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerLanguages:
+    - es_ES
+  language: '1034'
+electronVersion: 33.4.11
