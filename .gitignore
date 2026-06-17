@@ -57,3 +57,6 @@ logs/
 
 # --- Cobertura de tests ---
 coverage/
+
+# Credenciales de Firebase (Producción y Desarrollo)
+electron/firebase-config.js
