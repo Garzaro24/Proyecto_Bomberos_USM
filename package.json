@@ -43,6 +43,7 @@
   "build": {
     "appId": "com.usm.bomberos",
     "productName": "Bomberos USM",
+    "icon": "assets/app-icon.ico",
     "directories": {
       "output": "release"
     },
@@ -58,14 +59,19 @@
       "releaseType": "release"
     },
     "win": {
+      "icon": "assets/app-icon.ico",
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
     "nsis": {
+      "installerIcon": "assets/installer-icon.ico",
+      "uninstallerIcon": "assets/app-icon.ico",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
