@@ -18,7 +18,7 @@ export function initFirebase() {
     // Initialize Firestore forcing long polling to prevent hangs in Electron Node environment
     firestore = initializeFirestore(app, {
       experimentalForceLongPolling: true
-    });
+    }, firebaseConfig.databaseId);
     isInitialized = true;
     console.log("Firebase initialized successfully with long polling.");
     return true;
@@ -108,7 +108,7 @@ export async function syncLocalToCloud() {
     const unsyncedRecords = db.getUnsyncedRecords();
     for (const record of unsyncedRecords) {
       const recordDocRef = doc(firestore, 'records', record.id);
-      
+
       // Clean up local fields for firestore compatibility
       const { synced, createdAt, ...cloudRecordData } = record;
       await withTimeout(setDoc(recordDocRef, cloudRecordData, { merge: true }), 5000);
@@ -120,7 +120,7 @@ export async function syncLocalToCloud() {
     const unsyncedMilestones = db.getUnsyncedMilestones();
     for (const milestone of unsyncedMilestones) {
       const milestoneDocRef = doc(firestore, 'milestones', milestone.id);
-      
+
       const { synced, createdAt, ...cloudMilestoneData } = milestone;
       await withTimeout(setDoc(milestoneDocRef, cloudMilestoneData, { merge: true }), 5000);
       db.markMilestoneSynced(milestone.id);

@@ -3,6 +3,7 @@ const devConfig = {
     apiKey: "TU_API_KEY_AQUI",
     authDomain: "TU_AUTH_DOMAIN",
     projectId: "TU_PROJECT_ID",
+    databaseId: "TU_DATABASE_ID", // En entorno de desarrollo, se suele utilizar (default), si es que este no se cambio el nombre manualmente en firebase
     storageBucket: "TU_STORAGE_BUCKET",
     messagingSenderId: "TU_STORAGE_BUCKET",
     appId: "TU_STORAGE_BUCKET",
@@ -15,6 +16,7 @@ const prodConfig = {
     apiKey: "TU_API_KEY_AQUI",
     authDomain: "TU_AUTH_DOMAIN",
     projectId: "TU_PROJECT_ID",
+    databaseId: "TU_DATABASE_ID",
     storageBucket: "TU_STORAGE_BUCKET",
     messagingSenderId: "TU_STORAGE_BUCKET",
     appId: "TU_STORAGE_BUCKET",
