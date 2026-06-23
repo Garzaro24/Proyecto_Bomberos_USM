@@ -252,10 +252,25 @@ ipcMain.handle('auth:register', async (event, userData) => {
     }
 
     // 6. Role validation
-    const cleanRole = role ? String(role).trim() : 'Bombero';
-    const validRoles = ['Bombero', 'Paramedico', 'Sargento', 'Teniente'];
+    const cleanRole = role ? String(role).trim() : 'Bombero Razo';
+    const validRoles = [
+      'Bombero Razo',
+      'Distinguido',
+      'Cabo Segundo',
+      'Cabo Primero',
+      'Sargento Segundo',
+      'Sargento Primero',
+      'Sargento Mayor',
+      'Teniente',
+      'Primer Teniente',
+      'Capitán',
+      'Mayor',
+      'Teniente Coronel',
+      'Coronel',
+      'Administrador'
+    ];
     if (!validRoles.includes(cleanRole)) {
-      return { error: 'El Rango de Despliegue elegido no es válido.' };
+      return { error: 'La Jerarquía elegida no es válida.' };
     }
 
     const { salt, hash } = db.hashPassword(cleanPassword);
@@ -289,7 +304,7 @@ ipcMain.handle('auth:register', async (event, userData) => {
 
 ipcMain.handle('auth:update-profile', async (event, data) => {
   try {
-    const { username, firstName, lastName, personnelId, bloodType, photoBase64 } = data;
+    const { username, firstName, lastName, personnelId, bloodType, photoBase64, role } = data;
     if (!username || !firstName || !lastName || !personnelId || !bloodType) {
       return { error: 'Todos los campos obligatorios (*) deben completarse.' };
     }
@@ -299,6 +314,7 @@ ipcMain.handle('auth:update-profile', async (event, data) => {
     const cleanLastName = String(lastName).trim().toUpperCase();
     const cleanPersonnelId = String(personnelId).trim().toUpperCase();
     const cleanBloodType = String(bloodType).trim().toUpperCase();
+    const cleanRole = role ? String(role).trim() : '';
 
     if (!/^[A-ZÁÉÍÓÚÜÑ\s]{1,20}$/.test(cleanFirstName)) {
       return { 
@@ -323,6 +339,26 @@ ipcMain.handle('auth:update-profile', async (event, data) => {
       return { error: 'El tipo de sangre elegido no es válido.' };
     }
 
+    const validRoles = [
+      'Bombero Razo',
+      'Distinguido',
+      'Cabo Segundo',
+      'Cabo Primero',
+      'Sargento Segundo',
+      'Sargento Primero',
+      'Sargento Mayor',
+      'Teniente',
+      'Primer Teniente',
+      'Capitán',
+      'Mayor',
+      'Teniente Coronel',
+      'Coronel',
+      'Administrador'
+    ];
+    if (cleanRole && !validRoles.includes(cleanRole)) {
+      return { error: 'La Jerarquía elegida no es válida.' };
+    }
+
     const user = db.getUserByUsername(cleanUsername);
     if (!user) {
       return { error: 'Oficial de bomberos no registrado en el sistema.' };
@@ -342,7 +378,8 @@ ipcMain.handle('auth:update-profile', async (event, data) => {
       name: `${cleanFirstName} ${cleanLastName}`,
       personnelId: cleanPersonnelId,
       bloodType: cleanBloodType,
-      photoBase64
+      photoBase64,
+      role: cleanRole || user.role
     });
 
     const updatedUser = db.getUserByUsername(cleanUsername);

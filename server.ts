@@ -302,10 +302,25 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     // 6. Role validation
-    const cleanRole = role ? String(role).trim() : 'Bombero';
-    const validRoles = ['Bombero', 'Paramedico', 'Sargento', 'Teniente'];
+    const cleanRole = role ? String(role).trim() : 'Bombero Razo';
+    const validRoles = [
+      'Bombero Razo',
+      'Distinguido',
+      'Cabo Segundo',
+      'Cabo Primero',
+      'Sargento Segundo',
+      'Sargento Primero',
+      'Sargento Mayor',
+      'Teniente',
+      'Primer Teniente',
+      'Capitán',
+      'Mayor',
+      'Teniente Coronel',
+      'Coronel',
+      'Administrador'
+    ];
     if (!validRoles.includes(cleanRole)) {
-      return res.status(400).json({ error: 'El Rango de Despliegue elegido no es válido.' });
+      return res.status(400).json({ error: 'La Jerarquía elegida no es válida.' });
     }
 
     // Secure, salted password hash
@@ -386,7 +401,7 @@ app.post('/api/auth/login', (req, res) => {
 // C. Update profile with security validations & uniqueness check for Cédula de Identidad
 app.post('/api/auth/update-profile', (req, res) => {
   try {
-    const { username, firstName, lastName, personnelId, bloodType, photoBase64 } = req.body;
+    const { username, firstName, lastName, personnelId, bloodType, photoBase64, role } = req.body;
     if (!username || !firstName || !lastName || !personnelId || !bloodType) {
       return res.status(400).json({ error: 'Todos los campos obligatorios (*) deben completarse.' });
     }
@@ -396,6 +411,7 @@ app.post('/api/auth/update-profile', (req, res) => {
     const cleanLastName = String(lastName).trim().toUpperCase();
     const cleanPersonnelId = String(personnelId).trim().toUpperCase();
     const cleanBloodType = String(bloodType).trim().toUpperCase();
+    const cleanRole = role ? String(role).trim() : '';
 
     // Standard letters-only validation pattern matching register constraints
     if (!/^[A-ZÁÉÍÓÚÜÑ\s]{1,20}$/.test(cleanFirstName)) {
@@ -422,6 +438,26 @@ app.post('/api/auth/update-profile', (req, res) => {
       return res.status(400).json({ error: 'El tipo de sangre elegido no es válido.' });
     }
 
+    const validRoles = [
+      'Bombero Razo',
+      'Distinguido',
+      'Cabo Segundo',
+      'Cabo Primero',
+      'Sargento Segundo',
+      'Sargento Primero',
+      'Sargento Mayor',
+      'Teniente',
+      'Primer Teniente',
+      'Capitán',
+      'Mayor',
+      'Teniente Coronel',
+      'Coronel',
+      'Administrador'
+    ];
+    if (cleanRole && !validRoles.includes(cleanRole)) {
+      return res.status(400).json({ error: 'La Jerarquía elegida no es válida.' });
+    }
+
     const users = getUsers();
     const userIndex = users.findIndex(u => u.username === cleanUsername);
 
@@ -446,6 +482,10 @@ app.post('/api/auth/update-profile', (req, res) => {
       personnelId: cleanPersonnelId,
       bloodType: cleanBloodType
     };
+
+    if (cleanRole) {
+      updatedUserObj.role = cleanRole;
+    }
 
     if (photoBase64 !== undefined) {
       updatedUserObj.photoBase64 = photoBase64;

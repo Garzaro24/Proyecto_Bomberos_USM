@@ -13,6 +13,7 @@ export default function RecordsAdmin({ records, onUpdateRecord, onDeleteRecord }
   const [searchQuery, setSearchQuery] = useState('');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -31,6 +32,7 @@ export default function RecordsAdmin({ records, onUpdateRecord, onDeleteRecord }
     setSearchQuery('');
     setServiceTypeFilter('');
     setStatusFilter('');
+    setDateFilter('');
     setCurrentPage(1);
   };
 
@@ -47,9 +49,15 @@ export default function RecordsAdmin({ records, onUpdateRecord, onDeleteRecord }
       const matchType = serviceTypeFilter === '' || record.serviceType === serviceTypeFilter;
       const matchStatus = statusFilter === '' || record.status === statusFilter;
 
-      return matchSearch && matchType && matchStatus;
+      // Date filter: compare only YYYY-MM-DD portion (ignores time/hours)
+      const matchDate = dateFilter === '' || (
+        (record.serviceDate || '').substring(0, 10) === dateFilter ||
+        (record.timestamp || '').substring(0, 10) === dateFilter
+      );
+
+      return matchSearch && matchType && matchStatus && matchDate;
     });
-  }, [records, searchQuery, serviceTypeFilter, statusFilter]);
+  }, [records, searchQuery, serviceTypeFilter, statusFilter, dateFilter]);
 
   // Pagination math
   const totalEntries = filteredRecords.length;
@@ -98,7 +106,7 @@ export default function RecordsAdmin({ records, onUpdateRecord, onDeleteRecord }
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
           
           {/* Unit/Personnel Search */}
-          <div className="col-span-1 md:col-span-4 flex flex-col gap-2">
+          <div className="col-span-1 md:col-span-3 flex flex-col gap-2">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unidad o Nombre de Personal</label>
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -157,7 +165,7 @@ export default function RecordsAdmin({ records, onUpdateRecord, onDeleteRecord }
           </div>
 
           {/* Status Filter */}
-          <div className="col-span-1 md:col-span-3 flex flex-col gap-2">
+          <div className="col-span-1 md:col-span-2 flex flex-col gap-2">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Estado Operativo</label>
             <select
               value={statusFilter}
@@ -169,6 +177,21 @@ export default function RecordsAdmin({ records, onUpdateRecord, onDeleteRecord }
               <option value="Active" className="bg-[#020617] text-slate-150">Activo</option>
               <option value="Pending Review" className="bg-[#020617] text-slate-150">Pendiente de Revisión</option>
             </select>
+          </div>
+
+          {/* Date Filter — YYYY-MM-DD, ignores hours/seconds */}
+          <div className="col-span-1 md:col-span-2 flex flex-col gap-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Calendar className="w-3 h-3 text-indigo-400" />
+              Filtrar por Fecha
+            </label>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 bg-slate-950/80 border border-slate-800 focus:border-indigo-500/85 rounded-xl text-sm transition-all h-[38px] text-slate-300 outline-none"
+              title="Filtra registros por fecha de servicio (año-mes-día, sin hora)"
+            />
           </div>
 
           {/* Buttons Area */}

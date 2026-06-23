@@ -22,7 +22,7 @@ export default function DailyLog({ onSaveRecord, sessionUser }: DailyLogProps) {
     serviceDate: getTodayLocalDate(),
     serviceType: '',
     summary: '',
-    status: 'Completed' as 'Completed' | 'Active' | 'Pending Review'
+    status: 'Pending Review' as 'Completed' | 'Active' | 'Pending Review'
   });
 
   const [nationality, setNationality] = useState<'V' | 'E'>('V');
@@ -179,7 +179,7 @@ export default function DailyLog({ onSaveRecord, sessionUser }: DailyLogProps) {
         serviceDate: getTodayLocalDate(),
         serviceType: '',
         summary: '',
-        status: 'Completed'
+        status: 'Pending Review'
       });
       
       // Keep state session values if still logged in
@@ -222,7 +222,7 @@ export default function DailyLog({ onSaveRecord, sessionUser }: DailyLogProps) {
         serviceDate: getTodayLocalDate(),
         serviceType: '',
         summary: '',
-        status: 'Completed'
+        status: 'Pending Review'
       });
 
       if (pId.includes('-')) {
@@ -240,7 +240,7 @@ export default function DailyLog({ onSaveRecord, sessionUser }: DailyLogProps) {
         serviceDate: getTodayLocalDate(),
         serviceType: '',
         summary: '',
-        status: 'Completed'
+        status: 'Pending Review'
       });
       setIdNumber('');
     }
@@ -432,17 +432,14 @@ export default function DailyLog({ onSaveRecord, sessionUser }: DailyLogProps) {
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest" htmlFor="status">
               Estado Operativo Inicial
             </label>
-            <select
-              id="status"
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500/85 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 transition-all outline-none h-[42px] font-medium"
-            >
-              <option value="Completed" className="bg-[#020617] text-slate-100">Completado (Resuelto)</option>
-              <option value="Active" className="bg-[#020617] text-slate-100">Activo (En Curso)</option>
-              <option value="Pending Review" className="bg-[#020617] text-slate-100">Pendiente de Revisión</option>
-            </select>
+            {/* Estado fijo: solo el administrador puede cambiarlo desde Admin de Registros */}
+            <div className="w-full bg-slate-950/50 border border-amber-700/40 rounded-xl px-3.5 py-2.5 h-[42px] flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                <span className="text-sm font-bold text-amber-300">Pendiente de Revisión</span>
+              </span>
+              <span className="ml-auto text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Solo Admin puede cambiar</span>
+            </div>
           </div>
 
           {/* Row 4: Summary with exactly 300 character limit */}

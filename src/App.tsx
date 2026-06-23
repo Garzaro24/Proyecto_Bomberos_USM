@@ -177,6 +177,14 @@ export default function App() {
     return <AuthPortal onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // Only the 'admin' account has access to Admin de Registros
+  const isAdmin = sessionUser?.username === 'admin';
+
+  // Safety redirect: if a non-admin somehow lands on the admin tab, go to daily_log
+  if (!isAdmin && currentTab === 'records_admin') {
+    setCurrentTab('daily_log');
+  }
+
   return (
     <div className="bg-[#020617] text-slate-100 font-sans min-h-screen flex text-[14px] leading-[20px] select-none">
       
@@ -215,19 +223,22 @@ export default function App() {
             </button>
           </li>
 
-          <li>
-            <button 
-              onClick={() => setCurrentTab('records_admin')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-bold tracking-wide uppercase cursor-pointer border ${
-                currentTab === 'records_admin'
-                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-transparent'
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              Admin de Registros
-            </button>
-          </li>
+          {/* Admin de Registros: solo visible para la cuenta 'admin' */}
+          {isAdmin && (
+            <li>
+              <button 
+                onClick={() => setCurrentTab('records_admin')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-bold tracking-wide uppercase cursor-pointer border ${
+                  currentTab === 'records_admin'
+                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-transparent'
+                }`}
+              >
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+                Admin de Registros
+              </button>
+            </li>
+          )}
 
           <li>
             <button 
@@ -349,11 +360,32 @@ export default function App() {
           )}
 
           {currentTab === 'records_admin' && (
-            <RecordsAdmin 
-              records={records} 
-              onUpdateRecord={handleUpdateRecord} 
-              onDeleteRecord={handleDeleteRecord} 
-            />
+            isAdmin ? (
+              <RecordsAdmin 
+                records={records} 
+                onUpdateRecord={handleUpdateRecord} 
+                onDeleteRecord={handleDeleteRecord} 
+              />
+            ) : (
+              // Fallback blocked view for unauthorized access attempts
+              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-6 animate-fade-in">
+                <div className="w-20 h-20 rounded-full bg-rose-950/30 border border-rose-800/40 flex items-center justify-center shadow-xl">
+                  <ShieldAlert className="w-10 h-10 text-rose-500" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-100 tracking-tight">Acceso Restringido</h2>
+                  <p className="text-slate-400 text-sm mt-2 max-w-sm">
+                    Esta sección es exclusiva para el administrador del sistema. Inicia sesión con la cuenta <span className="font-bold text-indigo-400 font-mono">admin</span> para acceder.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setCurrentTab('daily_log')}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg cursor-pointer border-0"
+                >
+                  Volver a Bitácora
+                </button>
+              </div>
+            )
           )}
 
           {currentTab === 'history' && (

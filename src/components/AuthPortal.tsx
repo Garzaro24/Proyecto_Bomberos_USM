@@ -25,7 +25,7 @@ export default function AuthPortal({ onLoginSuccess }: AuthPortalProps) {
   // Blood Type selection
   const [bloodType, setBloodType] = useState('O+');
   
-  const [role, setRole] = useState('Bombero');
+  const [role, setRole] = useState('Bombero Razo');
   
   // UI states
   const [showPassword, setShowPassword] = useState(false);
@@ -44,7 +44,7 @@ export default function AuthPortal({ onLoginSuccess }: AuthPortalProps) {
     setNationality('V');
     setIdNumber('');
     setBloodType('O+');
-    setRole('Bombero');
+    setRole('Bombero Razo');
     setError(null);
     setSuccess(null);
   };
@@ -422,7 +422,7 @@ export default function AuthPortal({ onLoginSuccess }: AuthPortalProps) {
               {/* Rango / Rol */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Rango de Despliegue
+                  Jerarquía
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">
@@ -434,10 +434,19 @@ export default function AuthPortal({ onLoginSuccess }: AuthPortalProps) {
                     className="w-full bg-slate-950/85 border border-slate-800 focus:border-indigo-500/85 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-200 outline-none transition-all h-[42px] cursor-pointer appearance-none"
                     disabled={isLoading}
                   >
-                    <option value="Bombero">Bombero</option>
-                    <option value="Paramedico">Paramedico</option>
-                    <option value="Sargento">Sargento</option>
+                    <option value="Bombero Razo">Bombero Razo</option>
+                    <option value="Distinguido">Distinguido</option>
+                    <option value="Cabo Segundo">Cabo Segundo</option>
+                    <option value="Cabo Primero">Cabo Primero</option>
+                    <option value="Sargento Segundo">Sargento Segundo</option>
+                    <option value="Sargento Primero">Sargento Primero</option>
+                    <option value="Sargento Mayor">Sargento Mayor</option>
                     <option value="Teniente">Teniente</option>
+                    <option value="Primer Teniente">Primer Teniente</option>
+                    <option value="Capitán">Capitán</option>
+                    <option value="Mayor">Mayor</option>
+                    <option value="Teniente Coronel">Teniente Coronel</option>
+                    <option value="Coronel">Coronel</option>
                   </select>
                 </div>
               </div>

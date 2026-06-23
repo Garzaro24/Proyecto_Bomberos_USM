@@ -162,22 +162,22 @@ export function registerUser(userData) {
 }
 
 export function updateProfile(username, data) {
-  const { firstName, lastName, name, personnelId, bloodType, photoBase64 } = data;
+  const { firstName, lastName, name, personnelId, bloodType, photoBase64, role } = data;
   if (photoBase64 !== undefined) {
     const stmt = db.prepare(`
       UPDATE users 
-      SET firstName = ?, lastName = ?, name = ?, personnelId = ?, bloodType = ?, photoBase64 = ?, synced = 0
+      SET firstName = ?, lastName = ?, name = ?, personnelId = ?, bloodType = ?, photoBase64 = ?, role = ?, synced = 0
       WHERE username = ?
     `);
-    stmt.run([firstName, lastName, name, personnelId, bloodType, photoBase64, username]);
+    stmt.run([firstName, lastName, name, personnelId, bloodType, photoBase64, role, username]);
     stmt.free();
   } else {
     const stmt = db.prepare(`
       UPDATE users 
-      SET firstName = ?, lastName = ?, name = ?, personnelId = ?, bloodType = ?, synced = 0
+      SET firstName = ?, lastName = ?, name = ?, personnelId = ?, bloodType = ?, role = ?, synced = 0
       WHERE username = ?
     `);
-    stmt.run([firstName, lastName, name, personnelId, bloodType, username]);
+    stmt.run([firstName, lastName, name, personnelId, bloodType, role, username]);
     stmt.free();
   }
   saveDatabase();

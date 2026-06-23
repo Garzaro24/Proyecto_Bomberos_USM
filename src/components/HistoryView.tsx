@@ -25,6 +25,22 @@ import {
 } from 'lucide-react';
 import { HumanMilestone, MilestoneType, UserProfile, ServiceRecord } from '../types';
 
+const ROLES_OPTIONS = [
+  'Bombero Razo',
+  'Distinguido',
+  'Cabo Segundo',
+  'Cabo Primero',
+  'Sargento Segundo',
+  'Sargento Primero',
+  'Sargento Mayor',
+  'Teniente',
+  'Primer Teniente',
+  'Capitán',
+  'Mayor',
+  'Teniente Coronel',
+  'Coronel'
+];
+
 interface HistoryViewProps {
   milestones: HumanMilestone[];
   onAddMilestone: (milestone: Omit<HumanMilestone, 'id'>) => void;
@@ -61,6 +77,10 @@ export default function HistoryView({
   const [editBloodType, setEditBloodType] = useState('O+');
   const [editNationality, setEditNationality] = useState<'V' | 'E'>('V');
   const [editIdNumber, setEditIdNumber] = useState('');
+  const [editRole, setEditRole] = useState('Teniente');
+
+  // Editable assignment text
+  const [editableAssignment, setEditableAssignment] = useState('');
   
   // Feedback states
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -144,16 +164,217 @@ export default function HistoryView({
                 .replace(/mb-[0-9]+/g, '');
             }
 
-            // Strip any remaining oklch/color-mix functions from the document's stylesheets 
-            // since html2canvas evaluates all stylesheets and crashes on unknown color functions.
-            const styleTags = doc.querySelectorAll('style');
-            styleTags.forEach(t => {
-              if (t.textContent) {
-                t.textContent = t.textContent
-                  .replace(/oklch\([^)]+\)/gi, 'inherit')
-                  .replace(/color-mix\([^)]+\)/gi, 'inherit');
+            // STEP 1: Force explicit white background and black text on the entire print area
+            // This prevents oklch/color-mix replacements from accidentally making backgrounds black.
+            try {
+              const printArea = doc.getElementById('printable-expediente');
+              if (printArea) {
+                // Force root styles
+                (printArea as HTMLElement).style.backgroundColor = '#ffffff';
+                (printArea as HTMLElement).style.color = '#000000';
+
+                // Force all descendants to use safe explicit colors
+                const allPrintEls = printArea.querySelectorAll('*');
+                allPrintEls.forEach(el => {
+                  const htmlEl = el as HTMLElement;
+                  // Reset background on any element that had a Tailwind background class
+                  const cls = htmlEl.className || '';
+                  if (typeof cls === 'string') {
+                    // Section boxes that need light gray background
+                    if (cls.includes('bg-slate-50') || cls.includes('bg-slate-100')) {
+                      htmlEl.style.backgroundColor = '#f8fafc';
+                      htmlEl.style.color = '#000000';
+                    }
+                    // White background areas (tables, etc.)
+                    if (cls.includes('bg-white')) {
+                      htmlEl.style.backgroundColor = '#ffffff';
+                      htmlEl.style.color = '#000000';
+                    }
+                    // Elements that may have dark bg from Tailwind resolving to oklch
+                    if (cls.includes('bg-slate-') || cls.includes('bg-gray-') || cls.includes('bg-zinc-')) {
+                      const existingBg = htmlEl.style.backgroundColor;
+                      if (!existingBg || existingBg === '' || existingBg === 'transparent') {
+                        htmlEl.style.backgroundColor = '#ffffff';
+                      }
+                    }
+                    // Ensure all text elements have black color
+                    if (cls.includes('text-slate-') || cls.includes('text-gray-') || cls.includes('text-black')) {
+                      htmlEl.style.color = '#000000';
+                    }
+                    if (cls.includes('text-slate-600') || cls.includes('text-slate-700') || cls.includes('text-slate-500')) {
+                      htmlEl.style.color = '#475569';
+                    }
+                  }
+                });
+
+                // Specifically handle the photo placeholder: replace SVG icons with plain text
+                const photoPlaceholder = printArea.querySelector('#pdf-photo-placeholder');
+                if (photoPlaceholder) {
+                  (photoPlaceholder as HTMLElement).style.backgroundColor = '#f1f5f9';
+                  (photoPlaceholder as HTMLElement).style.color = '#64748b';
+                  // Remove any SVG children (lucide icons that cause rendering artifacts)
+                  const svgs = photoPlaceholder.querySelectorAll('svg');
+                  svgs.forEach(svg => svg.remove());
+                }
+
+                // Force the assignment/summary section box to be explicitly light-colored
+                const assignmentBox = printArea.querySelector('#pdf-assignment-box');
+                if (assignmentBox) {
+                  (assignmentBox as HTMLElement).style.backgroundColor = '#f8fafc';
+                  (assignmentBox as HTMLElement).style.color = '#000000';
+                  (assignmentBox as HTMLElement).style.border = '1px solid #000000';
+                  const assignmentChildren = assignmentBox.querySelectorAll('*');
+                  assignmentChildren.forEach(child => {
+                    (child as HTMLElement).style.color = '#000000';
+                    (child as HTMLElement).style.backgroundColor = 'transparent';
+                  });
+                }
+              }
+            } catch (err) {
+              console.error("Error forcing explicit colors on print area:", err);
+            }
+
+            // STEP 2: Clean inline style attributes, color attributes, and SVG attributes (like fill, stroke) on all elements
+            try {
+              const allElements = doc.querySelectorAll('*');
+              allElements.forEach(el => {
+                // 1. Check style attribute
+                const styleAttr = el.getAttribute('style');
+                if (styleAttr && (styleAttr.includes('oklch') || styleAttr.includes('color-mix'))) {
+                  el.setAttribute('style', styleAttr
+                    .replace(/oklch\([^)]+\)/gi, '#000000')
+                    .replace(/color-mix\([^)]+\)/gi, 'inherit')
+                  );
+                }
+                // 2. Check SVG fill attribute
+                const fillAttr = el.getAttribute('fill');
+                if (fillAttr && (fillAttr.includes('oklch') || fillAttr.includes('color-mix'))) {
+                  el.setAttribute('fill', '#000000');
+                }
+                // 3. Check SVG stroke attribute
+                const strokeAttr = el.getAttribute('stroke');
+                if (strokeAttr && (strokeAttr.includes('oklch') || strokeAttr.includes('color-mix'))) {
+                  el.setAttribute('stroke', '#000000');
+                }
+                // 4. Check color attribute
+                const colorAttr = el.getAttribute('color');
+                if (colorAttr && (colorAttr.includes('oklch') || colorAttr.includes('color-mix'))) {
+                  el.setAttribute('color', '#000000');
+                }
+              });
+            } catch (err) {
+              console.error("Error cleaning element attributes in clone:", err);
+            }
+
+            // STEP 3: Extract all CSS rules from the cloned document's stylesheets (including CSSOM injected rules)
+            let combinedCss = '';
+            try {
+              const sheets = Array.from(doc.styleSheets);
+              sheets.forEach(sheet => {
+                try {
+                  const rules = sheet.cssRules || sheet.rules;
+                  if (rules) {
+                    for (let i = 0; i < rules.length; i++) {
+                      combinedCss += rules[i].cssText + '\n';
+                    }
+                  } else if (sheet.ownerNode && sheet.ownerNode.textContent) {
+                    combinedCss += sheet.ownerNode.textContent + '\n';
+                  }
+                } catch (e) {
+                  if (sheet.ownerNode && sheet.ownerNode.textContent) {
+                    combinedCss += sheet.ownerNode.textContent + '\n';
+                  }
+                }
+              });
+            } catch (err) {
+              console.error("Error reading styleSheets in clone:", err);
+            }
+
+            if (!combinedCss.trim()) {
+              const styleTags = doc.querySelectorAll('style');
+              styleTags.forEach(t => {
+                if (t.textContent) {
+                  combinedCss += t.textContent + '\n';
+                }
+              });
+            }
+
+            // Clean oklch and color-mix functions which cause html2canvas to crash.
+            const cleanedCss = combinedCss
+              .replace(/oklch\([^)]+\)/gi, '#000000')
+              .replace(/color-mix\([^)]+\)/gi, 'inherit');
+
+            // Remove all existing style and stylesheet link elements in the cloned document
+            const styleNodes = doc.querySelectorAll('style, link[rel="stylesheet"]');
+            styleNodes.forEach(node => {
+              if (node.parentNode) {
+                node.parentNode.removeChild(node);
               }
             });
+
+            // STEP 4: Create a brand new single inline style tag with the sanitized CSS rules
+            // Also inject explicit base styles to guarantee white background on print area
+            const newStyle = doc.createElement('style');
+            newStyle.textContent = cleanedCss + `
+              #printable-expediente, #printable-expediente * {
+                -webkit-print-color-adjust: exact !important;
+              }
+              #printable-expediente {
+                background-color: #ffffff !important;
+                color: #000000 !important;
+              }
+              #pdf-assignment-box {
+                background-color: #f8fafc !important;
+                color: #000000 !important;
+                border: 1px solid #000000 !important;
+              }
+              #pdf-assignment-box * {
+                color: #000000 !important;
+                background-color: transparent !important;
+              }
+              #pdf-photo-placeholder {
+                background-color: #f1f5f9 !important;
+                color: #64748b !important;
+                border: 1px dashed #94a3b8 !important;
+              }
+            `;
+            doc.head.appendChild(newStyle);
+
+            // STEP 5: Override getComputedStyle on the cloned document's window (doc.defaultView)
+            // to catch any computed color values containing oklch or color-mix and return a fallback
+            try {
+              const win = doc.defaultView;
+              if (win) {
+                const originalGetComputedStyle = win.getComputedStyle;
+                win.getComputedStyle = function(el, pseudoElt) {
+                  const style = originalGetComputedStyle.call(win, el, pseudoElt);
+                  return new Proxy(style, {
+                    get(target, prop) {
+                      const val = target[prop];
+                      if (typeof val === 'function') {
+                        return function(...args) {
+                          const res = val.apply(target, args);
+                          if (typeof res === 'string') {
+                            if (res.includes('oklch') || res.includes('color-mix')) {
+                              return '#000000';
+                            }
+                          }
+                          return res;
+                        };
+                      }
+                      if (typeof val === 'string') {
+                        if (val.includes('oklch') || val.includes('color-mix')) {
+                          return '#000000';
+                        }
+                      }
+                      return val;
+                    }
+                  });
+                };
+              }
+            } catch (err) {
+              console.error("Error overriding getComputedStyle in clone:", err);
+            }
           }
         },
         pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] },
@@ -211,6 +432,7 @@ export default function HistoryView({
       setEditFirstName(cleanFirst.toUpperCase());
       setEditLastName(cleanLast.toUpperCase());
       setEditBloodType(sessionUser.bloodType || 'O+');
+      setEditRole(sessionUser.role || 'Teniente');
 
       const pId = sessionUser.personnelId || '';
       if (pId.includes('-')) {
@@ -226,6 +448,7 @@ export default function HistoryView({
       setEditFirstName('JONATHAN');
       setEditLastName('HAYES');
       setEditBloodType('O+');
+      setEditRole('Teniente');
       setEditNationality('V');
       setEditIdNumber('8821000');
     }
@@ -353,7 +576,8 @@ export default function HistoryView({
         lastName: last,
         personnelId: formattedPersonnelId,
         bloodType: editBloodType,
-        photoBase64: sessionUser.photoBase64
+        photoBase64: sessionUser.photoBase64,
+        role: editRole
       });
 
       if (data.error) {
@@ -511,6 +735,16 @@ export default function HistoryView({
   const defaultAssignment = isSessionActive 
     ? `Oficial de guardia asignado a la Escuadra Operativa del Cuerpo de Bomberos USM. Registro de identificación: ${userCedulaId}.`
     : `Asignado desde el 12 de Octubre de 2021. Sus responsabilidades cruciales comprenden operaciones de extracción pesada, respuesta HazMat y soporte vital avanzado en emergencias médicas complejas.`;
+
+  // Sync editable assignment when default changes (e.g. on login or cedula update)
+  useEffect(() => {
+    setEditableAssignment(prev => {
+      // Only auto-update if the user hasn't customized it yet (it still equals the old default pattern)
+      if (!prev || prev === defaultAssignment) return defaultAssignment;
+      return prev;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userCedulaId, isSessionActive]);
 
   // Helper to classify sub-types of incident
   const getIncidentTheme = (serviceType: string) => {
@@ -933,6 +1167,20 @@ export default function HistoryView({
                 </select>
               </div>
 
+              {/* Jerarquía selection edit entry */}
+              <div className="flex flex-col gap-1.5 font-sans">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jerarquía</label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                  className="w-full bg-slate-950/85 border border-slate-800 focus:border-indigo-500/80 rounded-xl px-3 py-2 text-xs text-slate-200 transition-all outline-none h-9 cursor-pointer font-medium"
+                >
+                  {ROLES_OPTIONS.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Submit / Cancel Area */}
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800/80">
                 <button
@@ -992,16 +1240,24 @@ export default function HistoryView({
             <span className="text-[10px] text-slate-500 font-semibold mt-1">Por valor y antigüedad</span>
           </div>
 
-          {/* Current Assignment Banner Card spanning bottom cols */}
+          {/* Current Assignment Banner Card spanning bottom cols — Editable */}
           <div className="bg-indigo-950/10 border border-indigo-900/30 rounded-2xl p-5 col-span-1 sm:col-span-3 flex items-start gap-4.5 shadow-md">
             <div className="w-12 h-12 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center shrink-0">
               <Briefcase className="w-6 h-6 text-indigo-400" />
             </div>
-            <div>
-              <h3 className="font-extrabold text-slate-200 text-sm uppercase tracking-wide">Asignación Operativa Activa</h3>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed font-semibold">
-                {defaultAssignment}
-              </p>
+            <div className="flex-1">
+              <div className="flex justify-between items-center mb-1.5">
+                <h3 className="font-extrabold text-slate-200 text-sm uppercase tracking-wide">Asignación Operativa Activa</h3>
+                <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider bg-indigo-950/40 border border-indigo-900/50 px-2 py-0.5 rounded-full">Editable</span>
+              </div>
+              <textarea
+                value={editableAssignment}
+                onChange={(e) => setEditableAssignment(e.target.value)}
+                rows={3}
+                className="w-full bg-transparent text-slate-400 text-xs leading-relaxed font-semibold resize-none outline-none border border-transparent focus:border-indigo-700/50 focus:bg-indigo-950/20 rounded-lg px-2 py-1 transition-all placeholder-slate-600"
+                placeholder="Ingrese la asignación operativa del oficial..."
+              />
+              <p className="text-[9px] text-slate-600 mt-0.5">Haz clic sobre el texto para editarlo. Se imprimirá tal como está escrito.</p>
             </div>
           </div>
         </div>
@@ -1306,9 +1562,14 @@ export default function HistoryView({
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-full h-full border border-dashed border-slate-400 flex flex-col items-center justify-center text-center p-1.5 bg-slate-50">
-                  <User className="w-6 h-6 text-slate-400 mb-1" />
-                  <p className="text-[8px] leading-snug font-bold uppercase text-slate-400">Sin Foto Carnet</p>
+                <div
+                  id="pdf-photo-placeholder"
+                  style={{ backgroundColor: '#f1f5f9', border: '1px dashed #94a3b8' }}
+                  className="w-full h-full flex flex-col items-center justify-center text-center p-1.5"
+                >
+                  {/* Plain text fallback — no SVG icon to avoid black-box rendering in PDF */}
+                  <p style={{ color: '#64748b' }} className="text-[9px] leading-snug font-bold uppercase">SIN FOTO</p>
+                  <p style={{ color: '#94a3b8' }} className="text-[8px] leading-snug font-bold uppercase">CARNET</p>
                 </div>
               )}
             </div>
@@ -1326,7 +1587,7 @@ export default function HistoryView({
                     <td className="py-1.5 font-mono text-black font-bold">{userCedulaId}</td>
                   </tr>
                   <tr className="border-b border-black">
-                    <th className="py-1.5 font-bold uppercase text-[10px] text-slate-700">Rango / Rango Jerárquico:</th>
+                    <th className="py-1.5 font-bold uppercase text-[10px] text-slate-700">Jerarquía:</th>
                     <td className="py-1.5 font-semibold text-black uppercase">{userRoleStr}</td>
                   </tr>
                   <tr className="border-b border-black">
@@ -1356,12 +1617,16 @@ export default function HistoryView({
           </div>
 
           {/* Section: Resumen de Desempeño */}
-          <div className="mb-6 border border-black p-3 bg-slate-50">
-            <h3 className="text-xs font-bold uppercase mb-1.5 tracking-tight border-b border-black pb-1">
+          <div
+            id="pdf-assignment-box"
+            style={{ backgroundColor: '#f8fafc', border: '1px solid #000000', color: '#000000' }}
+            className="mb-6 p-3"
+          >
+            <h3 style={{ color: '#000000', borderBottom: '1px solid #000000', paddingBottom: '4px', marginBottom: '6px' }} className="text-xs font-bold uppercase tracking-tight">
               I. RESUMEN DE ASIGNACIÓN Y RESPONSABILIDADES
             </h3>
-            <p className="text-[11px] leading-relaxed text-slate-800 text-justify">
-              {defaultAssignment}
+            <p style={{ color: '#1e293b' }} className="text-[11px] leading-relaxed text-justify">
+              {editableAssignment || defaultAssignment}
             </p>
           </div>
 
